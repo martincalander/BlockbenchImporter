@@ -1,6 +1,9 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading.Tasks;
+using UnityEditor;
 using UnityEditor.AssetImporters;
 using UnityEngine;
 
@@ -9,211 +12,274 @@ namespace MartinCalander.BlockbenchImporter
     /// <summary>
     /// Unity ScriptedImporter for Blockbench (.bbmodel) files.
     /// Automatically imports Blockbench models as Unity meshes.
+    /// Communicates with Blockbench Unity Bridge plugin for automatic GLTF export.
     /// </summary>
     [ScriptedImporter(2, "bbmodel")]
     public class BlockbenchImporter : ScriptedImporter
     {
-        [Tooltip("Scale factor to apply to the imported model")]
-        public float scaleFactor = 1f;
-        
-        [Tooltip("Generate a default material for the model")]
-        public bool generateMaterial = true;
-        
-        [Tooltip("Default material color")]
-        public Color defaultColor = Color.white;
+        [SerializeField] private bool autoExportGLTF = true;
         
         public override void OnImportAsset(AssetImportContext ctx)
         {
+            string assetPath = ctx.assetPath;
+            string fullPath = Path.GetFullPath(assetPath);
+            
+            // Create a placeholder object for the .bbmodel
+            var placeholder = new GameObject("BlockbenchModel");
+            var info = placeholder.AddComponent<BlockbenchModelInfo>();
+            info.sourcePath = assetPath;
+            info.importTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            
+            ctx.AddObjectToAsset("main", placeholder);
+            ctx.SetMainObject(placeholder);
+            
+            // Request GLTF export from Blockbench if enabled
+            if (autoExportGLTF)
+            {
+                BlockbenchBridge.RequestExport(fullPath);
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Component to store metadata about imported Blockbench models
+    /// </summary>
+    public class BlockbenchModelInfo : MonoBehaviour
+    {
+        public string sourcePath;
+        public string importTime;
+    }
+    
+    /// <summary>
+    /// TCP socket communication with Blockbench Unity Bridge plugin
+    /// </summary>
+    public static class BlockbenchBridge
+    {
+        private const string HOST_PREF_KEY = "BlockbenchBridge_Host";
+        private const string PORT_PREF_KEY = "BlockbenchBridge_Port";
+        
+        public static string Host
+        {
+            get => EditorPrefs.GetString(HOST_PREF_KEY, "127.0.0.1");
+            set => EditorPrefs.SetString(HOST_PREF_KEY, value);
+        }
+        
+        public static int Port
+        {
+            get => EditorPrefs.GetInt(PORT_PREF_KEY, 29405);
+            set => EditorPrefs.SetInt(PORT_PREF_KEY, value);
+        }
+        
+        private const int TIMEOUT_MS = 5000;
+        
+        /// <summary>
+        /// Send a command to Blockbench via TCP and get the response
+        /// </summary>
+        private static async Task<string> SendCommand(string commandJson)
+        {
             try
             {
-                string json = File.ReadAllText(ctx.assetPath);
-                var model = BlockbenchJsonParser.Parse(json);
-                
-                if (model == null)
+                using (var client = new TcpClient())
                 {
-                    ctx.LogImportError("Failed to parse Blockbench model");
-                    return;
-                }
-                
-                // Build the mesh with submeshes
-                var meshResult = BlockbenchMeshBuilder.BuildMeshWithSubmeshes(model);
-                Mesh mesh = meshResult.Mesh;
-                
-                if (mesh == null || mesh.vertexCount == 0)
-                {
-                    ctx.LogImportWarning("Blockbench model has no geometry");
-                    mesh = new Mesh { name = model.name ?? "EmptyModel" };
-                }
-                
-                // Apply scale factor
-                if (Mathf.Abs(scaleFactor - 1f) > 0.0001f && mesh.vertexCount > 0)
-                {
-                    Vector3[] vertices = mesh.vertices;
-                    for (int i = 0; i < vertices.Length; i++)
+                    // Connect with timeout
+                    var connectTask = client.ConnectAsync(Host, Port);
+                    if (await Task.WhenAny(connectTask, Task.Delay(TIMEOUT_MS)) != connectTask)
                     {
-                        vertices[i] *= scaleFactor;
+                        return null; // Connection timeout
                     }
-                    mesh.vertices = vertices;
-                    mesh.RecalculateBounds();
-                }
-                
-                // Create the root GameObject
-                var root = new GameObject(model.name ?? Path.GetFileNameWithoutExtension(ctx.assetPath));
-                
-                // Add mesh filter and renderer
-                var meshFilter = root.AddComponent<MeshFilter>();
-                meshFilter.sharedMesh = mesh;
-                
-                var meshRenderer = root.AddComponent<MeshRenderer>();
-                
-                // Create textures and materials for all embedded textures
-                var texturesByIndex = new Dictionary<int, Texture2D>();
-                var materialsByIndex = new Dictionary<int, Material>();
-                
-                if (model.textures != null)
-                {
-                    for (int i = 0; i < model.textures.Count; i++)
-                    {
-                        var texData = model.textures[i];
-                        if (!string.IsNullOrEmpty(texData.source))
-                        {
-                            Texture2D texture = CreateTextureFromBase64(texData.source, texData.name);
-                            if (texture != null)
-                            {
-                                string textureName = !string.IsNullOrEmpty(texData.name) ? texData.name : $"Texture_{i}";
-                                texture.name = textureName;
-                                ctx.AddObjectToAsset($"texture_{i}_{textureName}", texture);
-                                texturesByIndex[i] = texture;
-                                
-                                // Create material for this texture
-                                Material material = CreateMaterial(texture);
-                                material.name = $"Material_{textureName}";
-                                ctx.AddObjectToAsset($"material_{i}_{textureName}", material);
-                                materialsByIndex[i] = material;
-                            }
-                        }
-                    }
-                }
-                
-                // Create default material for faces without texture
-                Material defaultMaterial = null;
-                if (generateMaterial)
-                {
-                    defaultMaterial = CreateDefaultMaterial(defaultColor);
-                    defaultMaterial.name = "Material_Default";
-                    ctx.AddObjectToAsset("material_default", defaultMaterial);
-                    materialsByIndex[-1] = defaultMaterial;
-                }
-                
-                // Assign materials to submeshes
-                var materials = new List<Material>();
-                for (int submeshIdx = 0; submeshIdx < meshResult.TextureIndicesPerSubmesh.Length; submeshIdx++)
-                {
-                    int textureIndex = meshResult.TextureIndicesPerSubmesh[submeshIdx];
                     
-                    if (materialsByIndex.TryGetValue(textureIndex, out Material mat))
+                    await connectTask; // Propagate any exceptions
+                    
+                    using (var stream = client.GetStream())
                     {
-                        materials.Add(mat);
-                    }
-                    else if (defaultMaterial != null)
-                    {
-                        materials.Add(defaultMaterial);
-                    }
-                    else
-                    {
-                        // Create a fallback material
-                        Material fallback = CreateDefaultMaterial(Color.magenta);
-                        fallback.name = $"Material_Fallback_{submeshIdx}";
-                        ctx.AddObjectToAsset($"material_fallback_{submeshIdx}", fallback);
-                        materials.Add(fallback);
+                        stream.ReadTimeout = TIMEOUT_MS;
+                        stream.WriteTimeout = TIMEOUT_MS;
+                        
+                        // Send command (with newline delimiter)
+                        var sendData = Encoding.UTF8.GetBytes(commandJson + "\n");
+                        await stream.WriteAsync(sendData, 0, sendData.Length);
+                        await stream.FlushAsync();
+                        
+                        // Read response
+                        var buffer = new byte[8192];
+                        var responseBuilder = new StringBuilder();
+                        
+                        // Read until we get a newline
+                        while (true)
+                        {
+                            var readTask = stream.ReadAsync(buffer, 0, buffer.Length);
+                            if (await Task.WhenAny(readTask, Task.Delay(TIMEOUT_MS)) != readTask)
+                            {
+                                break; // Read timeout
+                            }
+                            
+                            var bytesRead = await readTask;
+                            if (bytesRead == 0) break;
+                            
+                            var chunk = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                            responseBuilder.Append(chunk);
+                            
+                            if (chunk.Contains("\n")) break;
+                        }
+                        
+                        return responseBuilder.ToString().Trim();
                     }
                 }
-                
-                meshRenderer.sharedMaterials = materials.ToArray();
-                
-                // Add assets to context
-                ctx.AddObjectToAsset("mesh", mesh);
-                ctx.AddObjectToAsset("root", root);
-                ctx.SetMainObject(root);
             }
-            catch (Exception e)
+            catch (SocketException)
             {
-                ctx.LogImportError($"Error importing Blockbench model: {e.Message}\n{e.StackTrace}");
+                return null; // Connection refused - Blockbench not running
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[BlockbenchBridge] Error: {ex.Message}");
+                return null;
             }
         }
         
-        private Texture2D CreateTextureFromBase64(string source, string textureName)
+        /// <summary>
+        /// Request Blockbench to export a specific bbmodel file as GLTF
+        /// </summary>
+        public static async void RequestExport(string bbmodelPath)
         {
-            try
+            var commandId = Guid.NewGuid().ToString();
+            var commandJson = $"{{\"action\":\"export\",\"bbmodelPath\":\"{bbmodelPath.Replace("\\", "\\\\")}\",\"id\":\"{commandId}\"}}";
+            
+            var response = await SendCommand(commandJson);
+            
+            if (response != null)
             {
-                // Remove data URL prefix if present
-                string base64Data = source;
-                if (source.Contains(","))
+                if (response.Contains("\"success\":true"))
                 {
-                    base64Data = source.Substring(source.IndexOf(',') + 1);
+                    Debug.Log($"[BlockbenchBridge] GLTF export completed for: {bbmodelPath}");
+                    
+                    // Refresh asset database to pick up the new GLTF file
+                    EditorApplication.delayCall += () =>
+                    {
+                        EditorApplication.delayCall += () =>
+                        {
+                            AssetDatabase.Refresh();
+                        };
+                    };
                 }
-                
-                byte[] imageData = Convert.FromBase64String(base64Data);
-                
-                var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-                texture.filterMode = FilterMode.Point;
-                texture.wrapMode = TextureWrapMode.Clamp;
-                
-                if (texture.LoadImage(imageData))
+                else
                 {
-                    texture.Apply();
-                    return texture;
+                    Debug.LogWarning($"[BlockbenchBridge] Export failed: {response}");
                 }
             }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"Failed to load embedded texture '{textureName}': {e.Message}");
-            }
-            
-            return null;
+            // Silent failure if Blockbench not running
         }
         
-        private Material CreateMaterial(Texture2D texture)
+        [MenuItem("Tools/Blockbench/Force Export GLTF %#b")] // Ctrl+Shift+B
+        public static async void ForceExportGLTF()
         {
-            // Try to use URP/HDRP lit shader, fallback to standard
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("HDRP/Lit");
-            }
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
+            var commandId = Guid.NewGuid().ToString();
+            var commandJson = $"{{\"action\":\"force-export\",\"id\":\"{commandId}\"}}";
             
-            var material = new Material(shader);
+            var response = await SendCommand(commandJson);
             
-            if (texture != null)
+            if (response != null)
             {
-                // Set main texture
-                material.mainTexture = texture;
+                if (response.Contains("\"success\":true"))
+                {
+                    Debug.Log("[BlockbenchBridge] Force export successful");
+                    EditorApplication.delayCall += () => AssetDatabase.Refresh();
+                }
+                else
+                {
+                    Debug.LogWarning($"[BlockbenchBridge] Force export failed: {response}");
+                }
             }
-            
-            return material;
+            else
+            {
+                Debug.LogError("[BlockbenchBridge] No response from Blockbench. Is it running with the Unity Bridge plugin?");
+            }
         }
         
-        private Material CreateDefaultMaterial(Color color)
+        [MenuItem("Tools/Blockbench/Check Connection")]
+        public static async void CheckConnection()
         {
-            // Try to use URP/HDRP lit shader, fallback to standard
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
+            var commandId = Guid.NewGuid().ToString();
+            var commandJson = $"{{\"action\":\"ping\",\"id\":\"{commandId}\"}}";
+            
+            var response = await SendCommand(commandJson);
+            
+            if (response != null)
             {
-                shader = Shader.Find("HDRP/Lit");
+                Debug.Log($"[BlockbenchBridge] Connected! Response: {response}");
             }
-            if (shader == null)
+            else
             {
-                shader = Shader.Find("Standard");
+                Debug.LogError($"[BlockbenchBridge] No response from Blockbench at {Host}:{Port}. Is it running with the Unity Bridge plugin?");
+            }
+        }
+        
+        [MenuItem("Tools/Blockbench/Settings")]
+        public static void OpenSettings()
+        {
+            BlockbenchBridgeSettingsWindow.ShowWindow();
+        }
+    }
+    
+    /// <summary>
+    /// Settings window for Blockbench Bridge configuration
+    /// </summary>
+    public class BlockbenchBridgeSettingsWindow : EditorWindow
+    {
+        private string host;
+        private int port;
+        
+        public static void ShowWindow()
+        {
+            var window = GetWindow<BlockbenchBridgeSettingsWindow>("Blockbench Bridge Settings");
+            window.minSize = new Vector2(300, 150);
+            window.Show();
+        }
+        
+        private void OnEnable()
+        {
+            host = BlockbenchBridge.Host;
+            port = BlockbenchBridge.Port;
+        }
+        
+        private void OnGUI()
+        {
+            EditorGUILayout.LabelField("Blockbench Unity Bridge Settings", EditorStyles.boldLabel);
+            EditorGUILayout.Space();
+            
+            host = EditorGUILayout.TextField("Host", host);
+            port = EditorGUILayout.IntField("Port", port);
+            
+            EditorGUILayout.Space();
+            EditorGUILayout.HelpBox(
+                "Make sure Blockbench is running with the Unity Bridge plugin.\n\n" +
+                "Shortcuts:\n" +
+                "• Ctrl+Shift+B - Force export current model as GLTF",
+                MessageType.Info
+            );
+            
+            EditorGUILayout.Space();
+            
+            EditorGUILayout.BeginHorizontal();
+            
+            if (GUILayout.Button("Save"))
+            {
+                BlockbenchBridge.Host = host;
+                BlockbenchBridge.Port = port;
+                Debug.Log("[BlockbenchBridge] Settings saved.");
             }
             
-            var material = new Material(shader);
-            material.color = color;
+            if (GUILayout.Button("Test Connection"))
+            {
+                BlockbenchBridge.CheckConnection();
+            }
             
-            return material;
+            EditorGUILayout.EndHorizontal();
+            
+            if (GUILayout.Button("Force Export GLTF (Ctrl+Shift+B)"))
+            {
+                BlockbenchBridge.ForceExportGLTF();
+            }
         }
     }
 }
