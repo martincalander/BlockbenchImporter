@@ -21,6 +21,7 @@ namespace MartinCalander.BlockbenchImporter
         public List<BlockbenchTexture> textures;
         public List<object> outliner;
         public List<BlockbenchGroup> groups;
+        public List<BlockbenchAnimation> animations;
     }
 
     [Serializable]
@@ -108,5 +109,49 @@ namespace MartinCalander.BlockbenchImporter
         public bool export;
         public bool visibility;
         public bool autouv;
+    }
+
+    /// <summary>
+    /// Represents a Blockbench animation
+    /// </summary>
+    [Serializable]
+    public class BlockbenchAnimation
+    {
+        public string uuid;
+        public string name;
+        public string loop; // "once", "loop", "hold"
+        public bool @override;
+        public float length;
+        public int snapping;
+        public bool selected;
+        public string anim_time_update;
+        public string blend_weight;
+        public string start_delay;
+        public string loop_delay;
+        public Dictionary<string, BlockbenchAnimator> animators;
+    }
+
+    /// <summary>
+    /// Represents an animator for a specific bone/element in an animation
+    /// </summary>
+    [Serializable]
+    public class BlockbenchAnimator
+    {
+        public string name;
+        public string type; // "bone"
+        public List<BlockbenchKeyframe> keyframes;
+    }
+
+    /// <summary>
+    /// Represents a single keyframe in an animation
+    /// </summary>
+    [Serializable]
+    public class BlockbenchKeyframe
+    {
+        public string channel; // "position", "rotation", "scale"
+        public float time;
+        public float[] data_points; // [x, y, z]
+        public string interpolation; // "linear", "catmullrom", "step", "bezier"
+        public string uuid;
     }
 }

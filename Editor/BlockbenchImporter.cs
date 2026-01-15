@@ -22,6 +22,9 @@ namespace MartinCalander.BlockbenchImporter
         [Tooltip("Default material color")]
         public Color defaultColor = Color.white;
         
+        [Tooltip("Import animations from the model")]
+        public bool importAnimations = true;
+        
         public override void OnImportAsset(AssetImportContext ctx)
         {
             try
@@ -130,6 +133,28 @@ namespace MartinCalander.BlockbenchImporter
                 }
                 
                 meshRenderer.sharedMaterials = materials.ToArray();
+                
+                // Import animations
+                if (importAnimations && model.animations != null && model.animations.Count > 0)
+                {
+                    var animResult = BlockbenchAnimationBuilder.BuildAnimations(model, scaleFactor);
+                    
+                    foreach (var clip in animResult.Clips)
+                    {
+                        if (clip != null)
+                        {
+                            ctx.AddObjectToAsset($"animation_{clip.name}", clip);
+                        }
+                    }
+                    
+                    // If there are animations, add an Animator component to the root
+                    if (animResult.Clips.Count > 0)
+                    {
+                        var animator = root.AddComponent<Animator>();
+                        // Note: An AnimatorController would need to be created separately
+                        // or assigned manually after import
+                    }
+                }
                 
                 // Add assets to context
                 ctx.AddObjectToAsset("mesh", mesh);

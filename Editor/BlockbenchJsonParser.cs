@@ -22,6 +22,7 @@ namespace MartinCalander.BlockbenchImporter
             // Now manually parse elements with their complex nested structures
             model.elements = ParseElements(json);
             model.textures = ParseTextures(json);
+            model.animations = ParseAnimations(json);
             
             return model;
         }
@@ -592,6 +593,280 @@ namespace MartinCalander.BlockbenchImporter
                 return false;
             
             return defaultValue;
+        }
+
+        private static float GetFloatValue(string json, string key, float defaultValue)
+        {
+            string pattern = $"\"{key}\":";
+            int start = json.IndexOf(pattern);
+            if (start < 0) return defaultValue;
+            
+            start += pattern.Length;
+            
+            // Skip whitespace
+            while (start < json.Length && char.IsWhiteSpace(json[start]))
+                start++;
+            
+            var sb = new StringBuilder();
+            while (start < json.Length && (char.IsDigit(json[start]) || json[start] == '-' || json[start] == '.'))
+            {
+                sb.Append(json[start]);
+                start++;
+            }
+            
+            if (float.TryParse(sb.ToString(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float value))
+                return value;
+            
+            return defaultValue;
+        }
+
+        private static List<BlockbenchAnimation> ParseAnimations(string json)
+        {
+            var animations = new List<BlockbenchAnimation>();
+            
+            int animationsStart = json.IndexOf("\"animations\":");
+            if (animationsStart < 0) return animations;
+            
+            int arrayStart = json.IndexOf('[', animationsStart);
+            if (arrayStart < 0) return animations;
+            
+            int arrayEnd = FindMatchingBracket(json, arrayStart, '[', ']');
+            if (arrayEnd < 0) return animations;
+            
+            string animationsJson = json.Substring(arrayStart + 1, arrayEnd - arrayStart - 1);
+            
+            // Parse each animation object
+            int depth = 0;
+            int animStart = -1;
+            
+            for (int i = 0; i < animationsJson.Length; i++)
+            {
+                char c = animationsJson[i];
+                
+                if (c == '{')
+                {
+                    if (depth == 0) animStart = i;
+                    depth++;
+                }
+                else if (c == '}')
+                {
+                    depth--;
+                    if (depth == 0 && animStart >= 0)
+                    {
+                        string animJson = animationsJson.Substring(animStart, i - animStart + 1);
+                        var animation = ParseAnimation(animJson);
+                        if (animation != null)
+                        {
+                            animations.Add(animation);
+                        }
+                        animStart = -1;
+                    }
+                }
+            }
+            
+            return animations;
+        }
+
+        private static BlockbenchAnimation ParseAnimation(string json)
+        {
+            var animation = new BlockbenchAnimation();
+            
+            animation.uuid = GetStringValue(json, "uuid");
+            animation.name = GetStringValue(json, "name");
+            animation.loop = GetStringValue(json, "loop") ?? "once";
+            animation.@override = GetBoolValue(json, "override", false);
+            animation.length = GetFloatValue(json, "length", 1f);
+            animation.snapping = GetIntValue(json, "snapping", 24);
+            animation.selected = GetBoolValue(json, "selected", false);
+            animation.anim_time_update = GetStringValue(json, "anim_time_update");
+            animation.blend_weight = GetStringValue(json, "blend_weight");
+            animation.start_delay = GetStringValue(json, "start_delay");
+            animation.loop_delay = GetStringValue(json, "loop_delay");
+            animation.animators = ParseAnimators(json);
+            
+            return animation;
+        }
+
+        private static Dictionary<string, BlockbenchAnimator> ParseAnimators(string json)
+        {
+            var animators = new Dictionary<string, BlockbenchAnimator>();
+            
+            int animatorsStart = json.IndexOf("\"animators\":");
+            if (animatorsStart < 0) return animators;
+            
+            int objStart = json.IndexOf('{', animatorsStart);
+            if (objStart < 0) return animators;
+            
+            int objEnd = FindMatchingBracket(json, objStart, '{', '}');
+            if (objEnd < 0) return animators;
+            
+            string animatorsJson = json.Substring(objStart + 1, objEnd - objStart - 1);
+            
+            // Parse each animator by UUID key
+            int depth = 0;
+            int animatorStart = -1;
+            string currentKey = null;
+            
+            for (int i = 0; i < animatorsJson.Length; i++)
+            {
+                char c = animatorsJson[i];
+                
+                if (c == '"' && depth == 0)
+                {
+                    int keyEnd = animatorsJson.IndexOf('"', i + 1);
+                    if (keyEnd > i)
+                    {
+                        currentKey = animatorsJson.Substring(i + 1, keyEnd - i - 1);
+                        i = keyEnd;
+                    }
+                }
+                else if (c == '{')
+                {
+                    if (depth == 0) animatorStart = i;
+                    depth++;
+                }
+                else if (c == '}')
+                {
+                    depth--;
+                    if (depth == 0 && animatorStart >= 0 && currentKey != null)
+                    {
+                        string animatorJson = animatorsJson.Substring(animatorStart, i - animatorStart + 1);
+                        var animator = ParseAnimator(animatorJson);
+                        if (animator != null)
+                        {
+                            animators[currentKey] = animator;
+                        }
+                        animatorStart = -1;
+                        currentKey = null;
+                    }
+                }
+            }
+            
+            return animators;
+        }
+
+        private static BlockbenchAnimator ParseAnimator(string json)
+        {
+            var animator = new BlockbenchAnimator();
+            
+            animator.name = GetStringValue(json, "name");
+            animator.type = GetStringValue(json, "type") ?? "bone";
+            animator.keyframes = ParseKeyframes(json);
+            
+            return animator;
+        }
+
+        private static List<BlockbenchKeyframe> ParseKeyframes(string json)
+        {
+            var keyframes = new List<BlockbenchKeyframe>();
+            
+            int keyframesStart = json.IndexOf("\"keyframes\":");
+            if (keyframesStart < 0) return keyframes;
+            
+            int arrayStart = json.IndexOf('[', keyframesStart);
+            if (arrayStart < 0) return keyframes;
+            
+            int arrayEnd = FindMatchingBracket(json, arrayStart, '[', ']');
+            if (arrayEnd < 0) return keyframes;
+            
+            string keyframesJson = json.Substring(arrayStart + 1, arrayEnd - arrayStart - 1);
+            
+            // Parse each keyframe object
+            int depth = 0;
+            int kfStart = -1;
+            
+            for (int i = 0; i < keyframesJson.Length; i++)
+            {
+                char c = keyframesJson[i];
+                
+                if (c == '{')
+                {
+                    if (depth == 0) kfStart = i;
+                    depth++;
+                }
+                else if (c == '}')
+                {
+                    depth--;
+                    if (depth == 0 && kfStart >= 0)
+                    {
+                        string kfJson = keyframesJson.Substring(kfStart, i - kfStart + 1);
+                        var keyframe = ParseKeyframe(kfJson);
+                        if (keyframe != null)
+                        {
+                            keyframes.Add(keyframe);
+                        }
+                        kfStart = -1;
+                    }
+                }
+            }
+            
+            return keyframes;
+        }
+
+        private static BlockbenchKeyframe ParseKeyframe(string json)
+        {
+            var keyframe = new BlockbenchKeyframe();
+            
+            keyframe.channel = GetStringValue(json, "channel");
+            keyframe.time = GetFloatValue(json, "time", 0f);
+            keyframe.interpolation = GetStringValue(json, "interpolation") ?? "linear";
+            keyframe.uuid = GetStringValue(json, "uuid");
+            
+            // Parse data_points - can be an array of objects or simple values
+            keyframe.data_points = ParseDataPoints(json);
+            
+            return keyframe;
+        }
+
+        private static float[] ParseDataPoints(string json)
+        {
+            int dpStart = json.IndexOf("\"data_points\":");
+            if (dpStart < 0) return null;
+            
+            int arrayStart = json.IndexOf('[', dpStart);
+            if (arrayStart < 0) return null;
+            
+            int arrayEnd = FindMatchingBracket(json, arrayStart, '[', ']');
+            if (arrayEnd < 0) return null;
+            
+            string dpJson = json.Substring(arrayStart + 1, arrayEnd - arrayStart - 1).Trim();
+            
+            // Data points can be:
+            // 1. Array of objects: [{"x":0,"y":0,"z":0}]
+            // 2. Array of numbers: [0, 0, 0]
+            
+            if (dpJson.Contains("{"))
+            {
+                // Parse object format - take first data point
+                int objStart = dpJson.IndexOf('{');
+                int objEnd = FindMatchingBracket(dpJson, objStart, '{', '}');
+                if (objEnd > objStart)
+                {
+                    string objJson = dpJson.Substring(objStart, objEnd - objStart + 1);
+                    float x = GetFloatValue(objJson, "x", 0f);
+                    float y = GetFloatValue(objJson, "y", 0f);
+                    float z = GetFloatValue(objJson, "z", 0f);
+                    return new float[] { x, y, z };
+                }
+            }
+            else
+            {
+                // Parse simple array format
+                string[] parts = dpJson.Split(',');
+                if (parts.Length >= 3)
+                {
+                    float[] values = new float[3];
+                    for (int i = 0; i < 3; i++)
+                    {
+                        float.TryParse(parts[i].Trim(), System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out values[i]);
+                    }
+                    return values;
+                }
+            }
+            
+            return null;
         }
     }
 }

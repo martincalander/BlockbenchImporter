@@ -13,6 +13,7 @@ namespace MartinCalander.BlockbenchImporter
         private SerializedProperty scaleFactorProp;
         private SerializedProperty generateMaterialProp;
         private SerializedProperty defaultColorProp;
+        private SerializedProperty importAnimationsProp;
         
         private bool showModelInfo = true;
         
@@ -23,6 +24,7 @@ namespace MartinCalander.BlockbenchImporter
             scaleFactorProp = serializedObject.FindProperty("scaleFactor");
             generateMaterialProp = serializedObject.FindProperty("generateMaterial");
             defaultColorProp = serializedObject.FindProperty("defaultColor");
+            importAnimationsProp = serializedObject.FindProperty("importAnimations");
         }
         
         public override void OnInspectorGUI()
@@ -48,6 +50,12 @@ namespace MartinCalander.BlockbenchImporter
                 EditorGUILayout.PropertyField(defaultColorProp, new GUIContent("Default Color", "Color for the generated material when no texture is embedded"));
                 EditorGUI.indentLevel--;
             }
+            
+            EditorGUILayout.Space();
+            
+            // Animation Settings
+            EditorGUILayout.LabelField("Animation", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(importAnimationsProp, new GUIContent("Import Animations", "Import animations from the Blockbench model"));
             
             EditorGUILayout.Space();
             
@@ -85,6 +93,9 @@ namespace MartinCalander.BlockbenchImporter
                             
                             int textureCount = model.textures?.Count ?? 0;
                             EditorGUILayout.LabelField("Textures", textureCount.ToString());
+                            
+                            int animationCount = model.animations?.Count ?? 0;
+                            EditorGUILayout.LabelField("Animations", animationCount.ToString());
                             
                             EditorGUI.indentLevel--;
                         }
