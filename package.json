@@ -1,0 +1,20 @@
+{
+  "name": "com.martincalander.blockbenchimporter",
+  "version": "0.1.0",
+  "displayName": "Blockbench Importer",
+  "description": "Import Blockbench models into Unity.",
+  "unity": "2021.3",
+  "unityRelease": "0b1",
+  "keywords": [
+    "Editor",
+    "Importer",
+    "Blockbench",
+    "Models"
+  ],
+  "author": {
+    "name": "Martin Calander",
+    "url": "https://martincalander.com",
+    "email": "martin.calander@gmail.com"
+  },
+  "hideInEditor": false
+}
