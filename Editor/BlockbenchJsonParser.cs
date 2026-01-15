@@ -221,6 +221,10 @@ namespace MartinCalander.BlockbenchImporter
             var face = new BlockbenchMeshFace();
             face.uv = new Dictionary<string, float[]>();
             face.vertices = new string[0];
+            face.texture = -1; // Default to no texture
+            
+            // Parse texture index
+            face.texture = GetIntValue(json, "texture", -1);
             
             // Parse uv dictionary
             int uvStart = json.IndexOf("\"uv\":");

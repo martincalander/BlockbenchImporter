@@ -74,6 +74,7 @@ namespace MartinCalander.BlockbenchImporter
     {
         public Dictionary<string, float[]> uv;
         public string[] vertices;
+        public int texture; // Texture index for mesh faces
     }
 
     [Serializable]

@@ -44,9 +44,24 @@ namespace MartinCalander.BlockbenchImporter
                 {
                     if (element == null || !element.visibility || !element.export) continue;
                     
+                    // Check cube faces
                     if (element.faces != null)
                     {
                         foreach (var face in element.faces.Values)
+                        {
+                            int texIndex = face.texture >= 0 ? face.texture : -1;
+                            if (!textureToSubmesh.ContainsKey(texIndex))
+                            {
+                                textureToSubmesh[texIndex] = submeshToTexture.Count;
+                                submeshToTexture.Add(texIndex);
+                            }
+                        }
+                    }
+                    
+                    // Check mesh faces
+                    if (element.meshFaces != null)
+                    {
+                        foreach (var face in element.meshFaces.Values)
                         {
                             int texIndex = face.texture >= 0 ? face.texture : -1;
                             if (!textureToSubmesh.ContainsKey(texIndex))
@@ -124,10 +139,8 @@ namespace MartinCalander.BlockbenchImporter
                     mesh.SetTriangles(trianglesPerSubmesh[i], i);
                 }
                 
-                if (normals.Count != vertices.Count)
-                {
-                    mesh.RecalculateNormals();
-                }
+                // Always recalculate normals to ensure they match triangle winding
+                mesh.RecalculateNormals();
                 
                 mesh.RecalculateBounds();
                 mesh.RecalculateTangents();
@@ -177,7 +190,11 @@ namespace MartinCalander.BlockbenchImporter
                     if (!element.vertices.TryGetValue(vertId, out float[] coords))
                         continue;
                     
+                    // Vertices in Blockbench mesh elements are in world space
+                    // Origin is the pivot point for rotation
                     Vector3 pos = new Vector3(coords[0], coords[1], coords[2]) * UnitScale;
+                    
+                    // Apply rotation around the origin pivot point (same as cube elements)
                     pos = rotation * (pos - origin) + origin;
                     faceVertices.Add(pos);
                     
@@ -192,13 +209,14 @@ namespace MartinCalander.BlockbenchImporter
                 
                 if (faceVertices.Count < 3) continue;
                 
-                // Calculate normal
+                // Calculate normal from the transformed vertices
                 Vector3 normal = Vector3.zero;
                 if (faceVertices.Count >= 3)
                 {
                     Vector3 v0 = faceVertices[0];
                     Vector3 v1 = faceVertices[1];
                     Vector3 v2 = faceVertices[2];
+                    // Cross product for CCW winding gives outward-facing normal
                     normal = Vector3.Cross(v1 - v0, v2 - v0).normalized;
                 }
                 
@@ -214,17 +232,18 @@ namespace MartinCalander.BlockbenchImporter
                     addedVertices++;
                 }
                 
-                // Get the correct submesh for this face's texture (mesh faces don't have texture info in the same way)
-                int submeshIndex = textureToSubmesh.ContainsKey(-1) ? textureToSubmesh[-1] : 0;
+                // Get the correct submesh for this face's texture
+                int texIndex = face.texture >= 0 ? face.texture : -1;
+                int submeshIndex = textureToSubmesh.ContainsKey(texIndex) ? textureToSubmesh[texIndex] : 0;
                 var triangles = trianglesPerSubmesh[submeshIndex];
                 
                 // Triangulate the face (fan triangulation)
+                // Use standard winding order - Blockbench mesh faces define their own vertex order
                 for (int i = 1; i < faceVertices.Count - 1; i++)
                 {
-                    // Reversed winding order for proper face culling in Unity
                     triangles.Add(faceVertexStart);
-                    triangles.Add(faceVertexStart + i + 1);
                     triangles.Add(faceVertexStart + i);
+                    triangles.Add(faceVertexStart + i + 1);
                 }
             }
             
