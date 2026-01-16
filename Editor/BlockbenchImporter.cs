@@ -1,8 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading.Tasks;
+using MartinCalander.BlockbenchImporter.Builders;
+using MartinCalander.BlockbenchImporter.Model;
+using MartinCalander.BlockbenchImporter.Parsing;
 using UnityEditor;
 using UnityEditor.AssetImporters;
 using UnityEngine;
@@ -10,276 +11,305 @@ using UnityEngine;
 namespace MartinCalander.BlockbenchImporter
 {
     /// <summary>
-    /// Unity ScriptedImporter for Blockbench (.bbmodel) files.
-    /// Automatically imports Blockbench models as Unity meshes.
-    /// Communicates with Blockbench Unity Bridge plugin for automatic GLTF export.
+    /// Unity ScriptedImporter for Blockbench .bbmodel files.
+    /// Imports Blockbench models with support for:
+    /// - Groups/hierarchy with correct pivots and transforms
+    /// - Cube and mesh elements
+    /// - Multiple textures with per-face assignment
+    /// - Animations with Mecanim Animator support
     /// </summary>
-    [ScriptedImporter(2, "bbmodel")]
+    [ScriptedImporter(13, "bbmodel")]
     public class BlockbenchImporter : ScriptedImporter
     {
-        [SerializeField] private bool autoExportGLTF = true;
-        
+        [Header("Scale Settings")]
+        [Tooltip("Global scale multiplier applied to the model")]
+        public float scale = 1f;
+
+        [Tooltip("How to interpret Blockbench units")]
+        public UnitsMode unitsMode = UnitsMode.SixteenPixelsPerUnit;
+
+        [Header("Texture Settings")]
+        [Tooltip("Import textures embedded in the .bbmodel file")]
+        public bool importTextures = true;
+
+        [Tooltip("Use point filtering for pixel art style")]
+        public bool pixelArt = true;
+
+        [Tooltip("Force alpha cutout mode on materials to prevent see-through artifacts")]
+        public bool forceAlphaClip = true;
+
+        [Tooltip("Alpha cutoff threshold for cutout materials")]
+        [Range(0f, 1f)]
+        public float alphaCutoff = 0.5f;
+
+        [Header("Animation Settings")]
+        [Tooltip("Import animations from the .bbmodel file as AnimationClips")]
+        public bool importAnimations = true;
+
+        [Tooltip("Create an AnimatorController (experimental - may have issues with sub-asset serialization)")]
+        public bool createAnimatorController = false;
+
         public override void OnImportAsset(AssetImportContext ctx)
-        {
-            string assetPath = ctx.assetPath;
-            string fullPath = Path.GetFullPath(assetPath);
-            
-            // Create a placeholder object for the .bbmodel
-            var placeholder = new GameObject("BlockbenchModel");
-            var info = placeholder.AddComponent<BlockbenchModelInfo>();
-            info.sourcePath = assetPath;
-            info.importTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            
-            ctx.AddObjectToAsset("main", placeholder);
-            ctx.SetMainObject(placeholder);
-            
-            // Request GLTF export from Blockbench if enabled
-            if (autoExportGLTF)
-            {
-                BlockbenchBridge.RequestExport(fullPath);
-            }
-        }
-    }
-    
-    /// <summary>
-    /// Component to store metadata about imported Blockbench models
-    /// </summary>
-    public class BlockbenchModelInfo : MonoBehaviour
-    {
-        public string sourcePath;
-        public string importTime;
-    }
-    
-    /// <summary>
-    /// TCP socket communication with Blockbench Unity Bridge plugin
-    /// </summary>
-    public static class BlockbenchBridge
-    {
-        private const string HOST_PREF_KEY = "BlockbenchBridge_Host";
-        private const string PORT_PREF_KEY = "BlockbenchBridge_Port";
-        
-        public static string Host
-        {
-            get => EditorPrefs.GetString(HOST_PREF_KEY, "127.0.0.1");
-            set => EditorPrefs.SetString(HOST_PREF_KEY, value);
-        }
-        
-        public static int Port
-        {
-            get => EditorPrefs.GetInt(PORT_PREF_KEY, 29405);
-            set => EditorPrefs.SetInt(PORT_PREF_KEY, value);
-        }
-        
-        private const int TIMEOUT_MS = 5000;
-        
-        /// <summary>
-        /// Send a command to Blockbench via TCP and get the response
-        /// </summary>
-        private static async Task<string> SendCommand(string commandJson)
         {
             try
             {
-                using (var client = new TcpClient())
+                // Read and parse the .bbmodel JSON
+                string json = File.ReadAllText(ctx.assetPath);
+                BbModel model = BbModelParser.Parse(json);
+
+                if (model == null)
                 {
-                    // Connect with timeout
-                    var connectTask = client.ConnectAsync(Host, Port);
-                    if (await Task.WhenAny(connectTask, Task.Delay(TIMEOUT_MS)) != connectTask)
+                    ctx.LogImportError("Failed to parse .bbmodel file");
+                    return;
+                }
+
+                // Create settings from importer fields
+                var settings = new BlockbenchImporterSettings
+                {
+                    scale = scale,
+                    unitsMode = unitsMode,
+                    importTextures = importTextures,
+                    pixelArt = pixelArt,
+                    forceAlphaClip = forceAlphaClip,
+                    alphaCutoff = alphaCutoff,
+                    importAnimations = importAnimations,
+                    createAnimatorController = createAnimatorController
+                };
+
+                // Build textures and materials
+                var materialBuilder = new MaterialBuilder(model, ctx.assetPath, settings);
+
+                if (importTextures)
+                {
+                    materialBuilder.BuildTextures();
+                }
+
+                materialBuilder.BuildMaterials();
+
+                // Build hierarchy
+                var hierarchyBuilder = new HierarchyBuilder(model, settings, materialBuilder);
+                GameObject root = hierarchyBuilder.BuildHierarchy();
+
+                if (root == null)
+                {
+                    ctx.LogImportError("Failed to build model hierarchy");
+                    return;
+                }
+
+                // IMPORTANT: Add root GameObject FIRST and set as main object immediately
+                // This ensures the prefab is the main asset, not textures/materials
+                string rootName = root.name;
+                ctx.AddObjectToAsset(rootName, root);
+                ctx.SetMainObject(root);
+
+                // Track used identifiers to ensure uniqueness
+                var usedIdentifiers = new HashSet<string>();
+                usedIdentifiers.Add(rootName);
+
+                // Add sub-assets: textures
+                foreach (var texture in materialBuilder.GetAllTextures())
+                {
+                    string identifier = GetUniqueIdentifier($"tex_{texture.name}", usedIdentifiers);
+                    ctx.AddObjectToAsset(identifier, texture);
+                }
+
+                // Add sub-assets: materials
+                foreach (var material in materialBuilder.GetAllMaterials())
+                {
+                    string identifier = GetUniqueIdentifier($"mat_{material.name}", usedIdentifiers);
+                    ctx.AddObjectToAsset(identifier, material);
+                }
+
+                // Add sub-assets: meshes
+                foreach (var mesh in hierarchyBuilder.BuiltMeshes)
+                {
+                    string identifier = GetUniqueIdentifier($"mesh_{mesh.name}", usedIdentifiers);
+                    ctx.AddObjectToAsset(identifier, mesh);
+                }
+
+                // Build animations if enabled
+                if (importAnimations && model.animations != null && model.animations.Count > 0)
+                {
+                    var animationBuilder = new AnimationBuilder(
+                        model,
+                        hierarchyBuilder.UuidToPath,
+                        hierarchyBuilder.UuidToTransform,
+                        settings
+                    );
+
+                    var clips = animationBuilder.BuildAnimationClips();
+
+                    // Add animation clips as sub-assets
+                    foreach (var clip in clips)
                     {
-                        return null; // Connection timeout
+                        // Mark as legacy clip for Animation component compatibility
+                        clip.legacy = !createAnimatorController;
+                        string identifier = GetUniqueIdentifier($"anim_{clip.name}", usedIdentifiers);
+                        ctx.AddObjectToAsset(identifier, clip);
                     }
-                    
-                    await connectTask; // Propagate any exceptions
-                    
-                    using (var stream = client.GetStream())
+
+                    if (clips.Count > 0)
                     {
-                        stream.ReadTimeout = TIMEOUT_MS;
-                        stream.WriteTimeout = TIMEOUT_MS;
-                        
-                        // Send command (with newline delimiter)
-                        var sendData = Encoding.UTF8.GetBytes(commandJson + "\n");
-                        await stream.WriteAsync(sendData, 0, sendData.Length);
-                        await stream.FlushAsync();
-                        
-                        // Read response
-                        var buffer = new byte[8192];
-                        var responseBuilder = new StringBuilder();
-                        
-                        // Read until we get a newline
-                        while (true)
+                        if (createAnimatorController)
                         {
-                            var readTask = stream.ReadAsync(buffer, 0, buffer.Length);
-                            if (await Task.WhenAny(readTask, Task.Delay(TIMEOUT_MS)) != readTask)
+                            // Experimental: Create animator controller
+                            var controllerResult = animationBuilder.BuildAnimatorController(clips, ctx.assetPath);
+                            if (controllerResult != null && controllerResult.controller != null)
                             {
-                                break; // Read timeout
+                                // Add controller as sub-asset
+                                string ctrlId = GetUniqueIdentifier($"ctrl_{controllerResult.controller.name}", usedIdentifiers);
+                                ctx.AddObjectToAsset(ctrlId, controllerResult.controller);
+                                
+                                // Add internal objects (state machine, states) as hidden sub-assets
+                                int subAssetIndex = 0;
+                                foreach (var subAsset in controllerResult.subAssets)
+                                {
+                                    string internalId = GetUniqueIdentifier($"ctrl_internal_{subAssetIndex++}", usedIdentifiers);
+                                    ctx.AddObjectToAsset(internalId, subAsset);
+                                }
+
+                                // Add Animator component to root
+                                var animator = root.AddComponent<Animator>();
+                                animator.runtimeAnimatorController = controllerResult.controller;
                             }
-                            
-                            var bytesRead = await readTask;
-                            if (bytesRead == 0) break;
-                            
-                            var chunk = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                            responseBuilder.Append(chunk);
-                            
-                            if (chunk.Contains("\n")) break;
                         }
-                        
-                        return responseBuilder.ToString().Trim();
+                        else
+                        {
+                            // Use legacy Animation component (more reliable for sub-assets)
+                            var animation = root.AddComponent<Animation>();
+                            foreach (var clip in clips)
+                            {
+                                animation.AddClip(clip, clip.name);
+                            }
+                            if (clips.Count > 0)
+                            {
+                                animation.clip = clips[0];
+                            }
+                        }
                     }
                 }
-            }
-            catch (SocketException)
-            {
-                return null; // Connection refused - Blockbench not running
+
+                // Strip BlockbenchOriginMarker components (editor-only)
+                var markers = root.GetComponentsInChildren<BlockbenchOriginMarker>(true);
+                foreach (var marker in markers)
+                {
+                    DestroyImmediate(marker);
+                }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[BlockbenchBridge] Error: {ex.Message}");
-                return null;
+                ctx.LogImportError($"Failed to import .bbmodel: {ex.Message}\n{ex.StackTrace}");
             }
         }
-        
+
         /// <summary>
-        /// Request Blockbench to export a specific bbmodel file as GLTF
+        /// Get a unique identifier for a sub-asset, appending a number if necessary.
         /// </summary>
-        public static async void RequestExport(string bbmodelPath)
+        private static string GetUniqueIdentifier(string baseName, HashSet<string> usedIdentifiers)
         {
-            var commandId = Guid.NewGuid().ToString();
-            var commandJson = $"{{\"action\":\"export\",\"bbmodelPath\":\"{bbmodelPath.Replace("\\", "\\\\")}\",\"id\":\"{commandId}\"}}";
-            
-            var response = await SendCommand(commandJson);
-            
-            if (response != null)
+            if (!usedIdentifiers.Contains(baseName))
             {
-                if (response.Contains("\"success\":true"))
-                {
-                    Debug.Log($"[BlockbenchBridge] GLTF export completed for: {bbmodelPath}");
-                    
-                    // Refresh asset database to pick up the new GLTF file
-                    EditorApplication.delayCall += () =>
-                    {
-                        EditorApplication.delayCall += () =>
-                        {
-                            AssetDatabase.Refresh();
-                        };
-                    };
-                }
-                else
-                {
-                    Debug.LogWarning($"[BlockbenchBridge] Export failed: {response}");
-                }
+                usedIdentifiers.Add(baseName);
+                return baseName;
             }
-            // Silent failure if Blockbench not running
-        }
-        
-        [MenuItem("Tools/Blockbench/Force Export GLTF %#b")] // Ctrl+Shift+B
-        public static async void ForceExportGLTF()
-        {
-            var commandId = Guid.NewGuid().ToString();
-            var commandJson = $"{{\"action\":\"force-export\",\"id\":\"{commandId}\"}}";
-            
-            var response = await SendCommand(commandJson);
-            
-            if (response != null)
+
+            // Find a unique suffix
+            int counter = 2;
+            string uniqueName;
+            do
             {
-                if (response.Contains("\"success\":true"))
-                {
-                    Debug.Log("[BlockbenchBridge] Force export successful");
-                    EditorApplication.delayCall += () => AssetDatabase.Refresh();
-                }
-                else
-                {
-                    Debug.LogWarning($"[BlockbenchBridge] Force export failed: {response}");
-                }
-            }
-            else
-            {
-                Debug.LogError("[BlockbenchBridge] No response from Blockbench. Is it running with the Unity Bridge plugin?");
-            }
-        }
-        
-        [MenuItem("Tools/Blockbench/Check Connection")]
-        public static async void CheckConnection()
-        {
-            var commandId = Guid.NewGuid().ToString();
-            var commandJson = $"{{\"action\":\"ping\",\"id\":\"{commandId}\"}}";
-            
-            var response = await SendCommand(commandJson);
-            
-            if (response != null)
-            {
-                Debug.Log($"[BlockbenchBridge] Connected! Response: {response}");
-            }
-            else
-            {
-                Debug.LogError($"[BlockbenchBridge] No response from Blockbench at {Host}:{Port}. Is it running with the Unity Bridge plugin?");
-            }
-        }
-        
-        [MenuItem("Tools/Blockbench/Settings")]
-        public static void OpenSettings()
-        {
-            BlockbenchBridgeSettingsWindow.ShowWindow();
+                uniqueName = $"{baseName}_{counter}";
+                counter++;
+            } while (usedIdentifiers.Contains(uniqueName));
+
+            usedIdentifiers.Add(uniqueName);
+            return uniqueName;
         }
     }
-    
+
     /// <summary>
-    /// Settings window for Blockbench Bridge configuration
+    /// Custom editor for the BlockbenchImporter with preview and validation.
     /// </summary>
-    public class BlockbenchBridgeSettingsWindow : EditorWindow
+    [CustomEditor(typeof(BlockbenchImporter))]
+    public class BlockbenchImporterEditor : ScriptedImporterEditor
     {
-        private string host;
-        private int port;
-        
-        public static void ShowWindow()
+        private SerializedProperty scaleProp;
+        private SerializedProperty unitsModeProp;
+        private SerializedProperty importTexturesProp;
+        private SerializedProperty pixelArtProp;
+        private SerializedProperty forceAlphaClipProp;
+        private SerializedProperty alphaCutoffProp;
+        private SerializedProperty importAnimationsProp;
+        private SerializedProperty createAnimatorControllerProp;
+
+        public override void OnEnable()
         {
-            var window = GetWindow<BlockbenchBridgeSettingsWindow>("Blockbench Bridge Settings");
-            window.minSize = new Vector2(300, 150);
-            window.Show();
+            base.OnEnable();
+
+            scaleProp = serializedObject.FindProperty("scale");
+            unitsModeProp = serializedObject.FindProperty("unitsMode");
+            importTexturesProp = serializedObject.FindProperty("importTextures");
+            pixelArtProp = serializedObject.FindProperty("pixelArt");
+            forceAlphaClipProp = serializedObject.FindProperty("forceAlphaClip");
+            alphaCutoffProp = serializedObject.FindProperty("alphaCutoff");
+            importAnimationsProp = serializedObject.FindProperty("importAnimations");
+            createAnimatorControllerProp = serializedObject.FindProperty("createAnimatorController");
         }
-        
-        private void OnEnable()
+
+        public override void OnInspectorGUI()
         {
-            host = BlockbenchBridge.Host;
-            port = BlockbenchBridge.Port;
-        }
-        
-        private void OnGUI()
-        {
-            EditorGUILayout.LabelField("Blockbench Unity Bridge Settings", EditorStyles.boldLabel);
+            serializedObject.Update();
+
+            EditorGUILayout.LabelField("Blockbench Importer", EditorStyles.boldLabel);
             EditorGUILayout.Space();
-            
-            host = EditorGUILayout.TextField("Host", host);
-            port = EditorGUILayout.IntField("Port", port);
-            
+
+            // Scale settings
+            EditorGUILayout.LabelField("Scale Settings", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(scaleProp, new GUIContent("Scale", "Global scale multiplier"));
+            EditorGUILayout.PropertyField(unitsModeProp, new GUIContent("Units Mode", "How to interpret Blockbench units"));
+
             EditorGUILayout.Space();
+
+            // Texture settings
+            EditorGUILayout.LabelField("Texture Settings", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(importTexturesProp, new GUIContent("Import Textures", "Import embedded textures"));
+
+            using (new EditorGUI.DisabledScope(!importTexturesProp.boolValue))
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(pixelArtProp, new GUIContent("Pixel Art Mode", "Use point filtering"));
+                EditorGUILayout.PropertyField(forceAlphaClipProp, new GUIContent("Force Alpha Clip", "Prevent see-through artifacts"));
+                EditorGUILayout.PropertyField(alphaCutoffProp, new GUIContent("Alpha Cutoff", "Cutoff threshold"));
+                EditorGUI.indentLevel--;
+            }
+
+            EditorGUILayout.Space();
+
+            // Animation settings
+            EditorGUILayout.LabelField("Animation Settings", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(importAnimationsProp, new GUIContent("Import Animations", "Import Blockbench animations"));
+
+            using (new EditorGUI.DisabledScope(!importAnimationsProp.boolValue))
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(createAnimatorControllerProp, new GUIContent("Create Animator Controller", "Generate Mecanim controller"));
+                EditorGUI.indentLevel--;
+            }
+
+            EditorGUILayout.Space();
+
+            // Info box
             EditorGUILayout.HelpBox(
-                "Make sure Blockbench is running with the Unity Bridge plugin.\n\n" +
-                "Shortcuts:\n" +
-                "• Ctrl+Shift+B - Force export current model as GLTF",
-                MessageType.Info
-            );
-            
-            EditorGUILayout.Space();
-            
-            EditorGUILayout.BeginHorizontal();
-            
-            if (GUILayout.Button("Save"))
-            {
-                BlockbenchBridge.Host = host;
-                BlockbenchBridge.Port = port;
-                Debug.Log("[BlockbenchBridge] Settings saved.");
-            }
-            
-            if (GUILayout.Button("Test Connection"))
-            {
-                BlockbenchBridge.CheckConnection();
-            }
-            
-            EditorGUILayout.EndHorizontal();
-            
-            if (GUILayout.Button("Force Export GLTF (Ctrl+Shift+B)"))
-            {
-                BlockbenchBridge.ForceExportGLTF();
-            }
+                "Blockbench Importer imports .bbmodel files with support for:\n" +
+                "• Groups/hierarchy with correct pivots\n" +
+                "• Cube and mesh elements\n" +
+                "• Multiple textures per model\n" +
+                "• Animations with Mecanim support",
+                MessageType.Info);
+
+            serializedObject.ApplyModifiedProperties();
+
+            ApplyRevertGUI();
         }
     }
 }
