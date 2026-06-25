@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace MartinCalander.BlockbenchImporter.Model
+namespace Essentials.BlockbenchImporter.Model
 {
     /// <summary>
     /// Root model representing a parsed .bbmodel file.
@@ -93,11 +93,11 @@ namespace MartinCalander.BlockbenchImporter.Model
         public float[] rotation;
         public float[] uv_offset;
         public bool mirror_uv;
-        public Dictionary<string, BbFace> faces = new Dictionary<string, BbFace>();
+        [NonSerialized] public Dictionary<string, BbFace> faces = new Dictionary<string, BbFace>();
 
         // For mesh elements
-        public Dictionary<string, float[]> vertices;
-        public Dictionary<string, BbMeshFace> meshFaces;
+        [NonSerialized] public Dictionary<string, float[]> vertices;
+        [NonSerialized] public Dictionary<string, BbMeshFace> meshFaces;
     }
 
     [Serializable]
@@ -115,7 +115,7 @@ namespace MartinCalander.BlockbenchImporter.Model
     public class BbMeshFace
     {
         public List<string> vertices = new List<string>(); // vertex UUIDs
-        public Dictionary<string, float[]> uv = new Dictionary<string, float[]>(); // vertex UUID -> [u, v]
+        [NonSerialized] public Dictionary<string, float[]> uv = new Dictionary<string, float[]>(); // vertex UUID -> [u, v]
         public int texture = -1;
     }
 
@@ -181,7 +181,7 @@ namespace MartinCalander.BlockbenchImporter.Model
         public string blend_weight;
         public string start_delay;
         public string loop_delay;
-        public Dictionary<string, BbAnimator> animators = new Dictionary<string, BbAnimator>();
+        [NonSerialized] public Dictionary<string, BbAnimator> animators = new Dictionary<string, BbAnimator>();
     }
 
     [Serializable]

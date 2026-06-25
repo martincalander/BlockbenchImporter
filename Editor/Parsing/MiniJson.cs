@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace MartinCalander.BlockbenchImporter.Parsing
+namespace Essentials.BlockbenchImporter.Parsing
 {
     /// <summary>
     /// Minimal JSON parser for parsing Blockbench models.

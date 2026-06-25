@@ -1,12 +1,12 @@
 using System.Collections.Generic;
-using MartinCalander.BlockbenchImporter.Builders;
-using MartinCalander.BlockbenchImporter.MeshBuilders;
-using MartinCalander.BlockbenchImporter.Model;
-using MartinCalander.BlockbenchImporter.Parsing;
-using MartinCalander.BlockbenchImporter.Utils;
+using Essentials.BlockbenchImporter.Builders;
+using Essentials.BlockbenchImporter.MeshBuilders;
+using Essentials.BlockbenchImporter.Model;
+using Essentials.BlockbenchImporter.Parsing;
+using Essentials.BlockbenchImporter.Utils;
 using UnityEngine;
 
-namespace MartinCalander.BlockbenchImporter.Builders
+namespace Essentials.BlockbenchImporter.Builders
 {
     /// <summary>
     /// Builds the Unity GameObject hierarchy from a parsed Blockbench model.

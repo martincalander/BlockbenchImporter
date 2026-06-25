@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
-using MartinCalander.BlockbenchImporter.Model;
+using Essentials.BlockbenchImporter.Model;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace MartinCalander.BlockbenchImporter.Builders
+namespace Essentials.BlockbenchImporter.Builders
 {
     /// <summary>
     /// Builds textures and materials from Blockbench texture definitions.

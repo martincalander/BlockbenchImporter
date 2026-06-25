@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using MartinCalander.BlockbenchImporter.Builders;
-using MartinCalander.BlockbenchImporter.Model;
-using MartinCalander.BlockbenchImporter.Parsing;
+using Essentials.BlockbenchImporter.Builders;
+using Essentials.BlockbenchImporter.Model;
+using Essentials.BlockbenchImporter.Parsing;
 using UnityEditor;
 using UnityEditor.AssetImporters;
 using UnityEngine;
 
-namespace MartinCalander.BlockbenchImporter
+namespace Essentials.BlockbenchImporter
 {
     /// <summary>
     /// Unity ScriptedImporter for Blockbench .bbmodel files.

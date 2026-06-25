@@ -116,4 +116,4 @@ MIT License - See LICENSE file for details.
 
 ## Credits
 
-Developed by Martin Calander
+Developed by Essentials

@@ -2,6 +2,14 @@
 
 All notable changes to the Blockbench Importer package will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Renamed public namespaces and the asmdef root namespace to `Essentials.BlockbenchImporter`.
+
+### Fixed
+- Suppressed Unity serialization analyzer warnings for manually parsed Blockbench dictionary data.
+
 ## [0.1.0] - 2026-01-16
 
 ### Added

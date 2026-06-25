@@ -1,11 +1,11 @@
 using System.Collections.Generic;
-using MartinCalander.BlockbenchImporter.Model;
-using MartinCalander.BlockbenchImporter.Utils;
+using Essentials.BlockbenchImporter.Model;
+using Essentials.BlockbenchImporter.Utils;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 
-namespace MartinCalander.BlockbenchImporter.Builders
+namespace Essentials.BlockbenchImporter.Builders
 {
     /// <summary>
     /// Builds AnimationClips and AnimatorController from Blockbench animations.

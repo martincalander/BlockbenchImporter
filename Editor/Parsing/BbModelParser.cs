@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using MartinCalander.BlockbenchImporter.Model;
+using Essentials.BlockbenchImporter.Model;
 using UnityEngine;
 
-namespace MartinCalander.BlockbenchImporter.Parsing
+namespace Essentials.BlockbenchImporter.Parsing
 {
     /// <summary>
     /// Tolerant JSON parser for Blockbench .bbmodel files.
