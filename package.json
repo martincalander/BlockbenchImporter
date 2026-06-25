@@ -1,10 +1,12 @@
 {
-  "name": "com.martincalander.blockbenchimporter",
+  "name": "com.essentials.blockbenchimporter",
   "version": "0.1.0",
   "displayName": "Blockbench Importer",
   "description": "Import Blockbench models into Unity.",
   "unity": "2021.3",
   "unityRelease": "0b1",
+  "licensesUrl": "LICENSE.md",
+  "license": "SEE LICENSE IN LICENSE.md",
   "keywords": [
     "Editor",
     "Importer",
@@ -12,7 +14,7 @@
     "Models"
   ],
   "author": {
-    "name": "Martin Calander",
+    "name": "Essentials",
     "url": "https://martincalander.com",
     "email": "martin.calander@gmail.com"
   },
