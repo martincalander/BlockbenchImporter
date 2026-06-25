@@ -5,7 +5,6 @@
   "description": "Import Blockbench models into Unity.",
   "unity": "2021.3",
   "unityRelease": "0b1",
-  "licensesUrl": "LICENSE.md",
   "license": "SEE LICENSE IN LICENSE.md",
   "keywords": [
     "Editor",
