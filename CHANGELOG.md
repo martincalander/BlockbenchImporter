@@ -6,8 +6,9 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 
 ### Changed
 
-- Replaced the README banner and checkmark mark with a smaller voxel-assembly logo.
+- Replaced the README banner and checkmark mark with the Blockbench bench motif in Unity's black-and-white palette.
 - Rewrote the public and UPM documentation in a shorter, more direct maintainer voice.
+- Moved GitHub community files under `.github/` and package guidance under `Documentation~/` so Unity ignores them.
 
 ## [1.0.0] - 2026-07-12
 

@@ -12,6 +12,7 @@ Other useful pages:
 
 - [Troubleshooting](troubleshooting.md)
 - [How the importer works](architecture.md)
+- [Roadmap](roadmap.md)
 - [Changelog](../CHANGELOG.md)
 
 - Package ID: `com.essentials.blockbenchimporter`

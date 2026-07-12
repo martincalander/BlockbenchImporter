@@ -44,9 +44,9 @@ If a `.bbmodel` fixture is necessary, strip it down to the problem and make sure
 - Run the relevant EditMode tests.
 - Make sure Unity compiles without new warnings.
 - Reimport an affected model twice and check that the result is stable.
-- Update [format support](Documentation~/format-support.md) and the [changelog](CHANGELOG.md) when behavior changes.
+- Update [format support](../Documentation~/format-support.md) and the [changelog](../CHANGELOG.md) when behavior changes.
 - Run `python3 .github/scripts/validate_package.py`.
 
 Keep the pull request focused and explain how Blockbench stores the data you changed. A commit subject like `Fix rotated north-face UVs` is more helpful than `Update importer`.
 
-Contributions are submitted under the [Apache License 2.0](LICENSE.md).
+Contributions are submitted under the [Apache License 2.0](../LICENSE.md).

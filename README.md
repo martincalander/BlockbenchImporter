@@ -84,10 +84,11 @@ If a supported feature imports incorrectly, that is a bug. Please [report it](ht
 - [Format support](Documentation~/format-support.md)
 - [Troubleshooting](Documentation~/troubleshooting.md)
 - [How the importer is put together](Documentation~/architecture.md)
+- [Roadmap](Documentation~/roadmap.md)
 
 ## Contributing
 
-Bug fixes, tests, docs, and new format support are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). Import changes should come with a small regression test or a model that is safe to redistribute.
+Bug fixes, tests, docs, and new format support are welcome. Start with [CONTRIBUTING.md](https://github.com/martincalander/UnityBlockbenchImporter/blob/main/.github/CONTRIBUTING.md). Import changes should come with a small regression test or a model that is safe to redistribute.
 
 ## License
 

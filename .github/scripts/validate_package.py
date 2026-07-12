@@ -60,10 +60,10 @@ def validate_required_files() -> None:
         "CHANGELOG.md",
         "LICENSE.md",
         "NOTICE.md",
-        "CONTRIBUTING.md",
-        "CODE_OF_CONDUCT.md",
-        "SECURITY.md",
-        "SUPPORT.md",
+        ".github/CONTRIBUTING.md",
+        ".github/CODE_OF_CONDUCT.md",
+        ".github/SECURITY.md",
+        ".github/SUPPORT.md",
         "GOVERNANCE.md",
         "package.json",
         "Documentation~/index.md",
@@ -72,6 +72,7 @@ def validate_required_files() -> None:
         "Documentation~/format-support.md",
         "Documentation~/troubleshooting.md",
         "Documentation~/architecture.md",
+        "Documentation~/roadmap.md",
         "Documentation~/Images/logo-mark.svg",
     )
     for relative in required:
