@@ -21,7 +21,7 @@ namespace Essentials.BlockbenchImporter.Parsing
                 throw new ArgumentException("JSON content is empty or null");
 
             var model = new BbModel();
-            
+
             // Parse using SimpleJSON-like manual approach for complex nested structures
             var root = MiniJson.Deserialize(json) as Dictionary<string, object>;
             if (root == null)
@@ -482,8 +482,8 @@ namespace Essentials.BlockbenchImporter.Parsing
                 {
                     // This is a group definition inline in outliner
                     var groupUuid = GetString(groupDict, "uuid");
-                    var group = model.groupsByUuid.ContainsKey(groupUuid) 
-                        ? model.groupsByUuid[groupUuid] 
+                    var group = model.groupsByUuid.ContainsKey(groupUuid)
+                        ? model.groupsByUuid[groupUuid]
                         : ParseGroup(groupDict);
 
                     var node = new OutlinerNode

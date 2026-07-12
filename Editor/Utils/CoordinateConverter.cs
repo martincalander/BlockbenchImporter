@@ -4,15 +4,15 @@ namespace Essentials.BlockbenchImporter.Utils
 {
     /// <summary>
     /// Coordinate system conversion utilities for Blockbench to Unity.
-    /// 
+    ///
     /// Blockbench coordinate system:
     /// - X = right, Y = up, Z = back (toward viewer in default Blockbench view)
     /// - Front face = "north" = faces -Z direction
     /// - Blockbench units are in pixels (typically 16 pixels = 1 meter)
-    /// 
+    ///
     /// Unity coordinate system:
     /// - X = right, Y = up, Z = forward
-    /// 
+    ///
     /// The conversion matches Blockbench's glTF export which:
     /// - Divides coordinates by 16 (1 Blockbench unit = 1/16 Unity units)
     /// - Keeps the same axis orientation (no Z flip)
