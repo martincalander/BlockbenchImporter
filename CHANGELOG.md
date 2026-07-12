@@ -20,7 +20,7 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 - Position, rotation, and scale animation clips with linear, stepped, Catmull-Rom, and Bezier interpolation plus optional Animator Controller generation.
 - Parser, geometry, and full importer EditMode regression tests.
 - UPM manual, contribution guide, support notes, and security reporting instructions.
-- GitHub issue forms, pull-request template, package checks, CodeQL, Dependabot, and tagged release archives with checksums.
+- GitHub issue forms, pull-request template, package checks, Dependabot, and tagged release archives with checksums.
 
 ### Changed
 

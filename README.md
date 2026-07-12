@@ -4,7 +4,6 @@
   <p>Drop a <code>.bbmodel</code> into Unity and use it like any other asset.</p>
 
 [![Validation](https://github.com/martincalander/UnityBlockbenchImporter/actions/workflows/validate.yml/badge.svg)](https://github.com/martincalander/UnityBlockbenchImporter/actions/workflows/validate.yml)
-[![CodeQL](https://github.com/martincalander/UnityBlockbenchImporter/actions/workflows/codeql.yml/badge.svg)](https://github.com/martincalander/UnityBlockbenchImporter/actions/workflows/codeql.yml)
 [![Unity 2021.3+](https://img.shields.io/badge/Unity-2021.3%2B-222?logo=unity)](https://unity.com/releases/editor/whats-new/2021.3.0)
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-6f8df4)](LICENSE.md)
 </div>
