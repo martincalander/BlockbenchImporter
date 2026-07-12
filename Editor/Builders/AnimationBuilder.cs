@@ -212,9 +212,9 @@ namespace Essentials.BlockbenchImporter.Builders
                 var dp = kf.data_points[0];
                 Vector3 bbPos = dp.ToVector3();
 
-                // Animation position offsets are in Blockbench units
-                // They get scaled by the root transform, so keep them in BB units
-                Vector3 unityPos = CoordinateConverter.ConvertPositionRaw(bbPos.x, bbPos.y, bbPos.z);
+                // Animation position offsets are in Blockbench units and are baked into Unity units.
+                Vector3 unityPos = CoordinateConverter.ConvertPositionRaw(bbPos.x, bbPos.y, bbPos.z) *
+                                   settings.importScale;
 
                 // Add to rest position
                 Vector3 finalPos = restPosition + unityPos;
@@ -233,9 +233,9 @@ namespace Essentials.BlockbenchImporter.Builders
                 curveZ.AddKey(kfZ);
             }
 
-            ApplyCurveInterpolation(curveX, keyframes, 0);
-            ApplyCurveInterpolation(curveY, keyframes, 1);
-            ApplyCurveInterpolation(curveZ, keyframes, 2);
+            ApplyCurveInterpolation(curveX, keyframes, 0, -settings.importScale);
+            ApplyCurveInterpolation(curveY, keyframes, 1, settings.importScale);
+            ApplyCurveInterpolation(curveZ, keyframes, 2, settings.importScale);
             clip.SetCurve(path, typeof(Transform), "localPosition.x", curveX);
             clip.SetCurve(path, typeof(Transform), "localPosition.y", curveY);
             clip.SetCurve(path, typeof(Transform), "localPosition.z", curveZ);
@@ -418,9 +418,9 @@ namespace Essentials.BlockbenchImporter.Builders
                 curveZ.AddKey(kfZ);
             }
 
-            ApplyCurveInterpolation(curveX, keyframes, 0);
-            ApplyCurveInterpolation(curveY, keyframes, 1);
-            ApplyCurveInterpolation(curveZ, keyframes, 2);
+            ApplyCurveInterpolation(curveX, keyframes, 0, 1f);
+            ApplyCurveInterpolation(curveY, keyframes, 1, 1f);
+            ApplyCurveInterpolation(curveZ, keyframes, 2, 1f);
             clip.SetCurve(path, typeof(Transform), "localScale.x", curveX);
             clip.SetCurve(path, typeof(Transform), "localScale.y", curveY);
             clip.SetCurve(path, typeof(Transform), "localScale.z", curveZ);
@@ -441,7 +441,8 @@ namespace Essentials.BlockbenchImporter.Builders
             }
         }
 
-        private static void ApplyCurveInterpolation(AnimationCurve curve, List<BbKeyframe> source, int axis)
+        private static void ApplyCurveInterpolation(AnimationCurve curve, List<BbKeyframe> source, int axis,
+            float valueScale)
         {
             int count = Mathf.Min(curve.length, source.Count);
             for (int i = 0; i < count; i++)
@@ -462,8 +463,12 @@ namespace Essentials.BlockbenchImporter.Builders
                         Keyframe key = curve.keys[i];
                         float leftTime = ReadAxis(source[i].bezier_left_time, axis);
                         float rightTime = ReadAxis(source[i].bezier_right_time, axis);
-                        key.inTangent = Mathf.Abs(leftTime) < 0.000001f ? 0f : ReadAxis(source[i].bezier_left_value, axis) / leftTime;
-                        key.outTangent = Mathf.Abs(rightTime) < 0.000001f ? 0f : ReadAxis(source[i].bezier_right_value, axis) / rightTime;
+                        key.inTangent = Mathf.Abs(leftTime) < 0.000001f
+                            ? 0f
+                            : ReadAxis(source[i].bezier_left_value, axis) * valueScale / leftTime;
+                        key.outTangent = Mathf.Abs(rightTime) < 0.000001f
+                            ? 0f
+                            : ReadAxis(source[i].bezier_right_value, axis) * valueScale / rightTime;
                         float previousGap = i > 0 ? Mathf.Max(0.000001f, source[i].time - source[i - 1].time) : 1f;
                         float nextGap = i + 1 < source.Count ? Mathf.Max(0.000001f, source[i + 1].time - source[i].time) : 1f;
                         key.inWeight = Mathf.Clamp01(-leftTime / previousGap);

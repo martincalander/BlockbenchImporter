@@ -8,23 +8,27 @@ namespace Essentials.BlockbenchImporter.Utils
     /// Blockbench coordinate system:
     /// - X = right, Y = up, Z = back (toward viewer in default Blockbench view)
     /// - Front face = "north" = faces -Z direction
-    /// - Blockbench units are in pixels (typically 16 pixels = 1 meter)
+    /// - Geometry is stored in Blockbench model units
     ///
     /// Unity coordinate system:
     /// - X = right, Y = up, Z = forward
     ///
     /// The conversion matches Blockbench's glTF export which:
-    /// - Divides coordinates by 16 (1 Blockbench unit = 1/16 Unity units)
+    /// - Uses a default export scale of 16 Blockbench units per meter
     /// - Keeps the same axis orientation (no Z flip)
     /// - Model naturally faces -Z (away from camera in Unity's default view)
     /// </summary>
     public static class CoordinateConverter
     {
         /// <summary>
-        /// Scale factor: Blockbench pixels to Unity units.
-        /// 16 Blockbench pixels = 1 Unity unit (matching glTF export with scale=16)
+        /// Default scale factor from Blockbench model units to Unity units.
+        /// 16 Blockbench units = 1 Unity unit (matching the default glTF export scale).
         /// </summary>
-        public const float PixelsToUnits = 1f / 16f;
+        public const float DefaultImportScale = 1f / 16f;
+
+        /// <summary>Legacy name for <see cref="DefaultImportScale"/>.</summary>
+        [System.Obsolete("Use DefaultImportScale. Blockbench model units are not always texture pixels.")]
+        public const float PixelsToUnits = DefaultImportScale;
 
         /// <summary>
         /// Convert a position from Blockbench to Unity coordinate system.
@@ -33,7 +37,13 @@ namespace Essentials.BlockbenchImporter.Utils
         public static Vector3 ConvertPosition(float x, float y, float z)
         {
             // Match Blockbench glTF export: divide by 16, negate X axis
-            return new Vector3(-x * PixelsToUnits, y * PixelsToUnits, z * PixelsToUnits);
+            return ConvertPosition(x, y, z, DefaultImportScale);
+        }
+
+        /// <summary>Convert a position using a custom number of Unity units per Blockbench unit.</summary>
+        public static Vector3 ConvertPosition(float x, float y, float z, float importScale)
+        {
+            return new Vector3(-x * importScale, y * importScale, z * importScale);
         }
 
         /// <summary>
@@ -113,7 +123,13 @@ namespace Essentials.BlockbenchImporter.Utils
         public static Vector3 ConvertAnimationPosition(Vector3 bbPos)
         {
             // Negate X to match glTF export coordinate system
-            return new Vector3(-bbPos.x * PixelsToUnits, bbPos.y * PixelsToUnits, bbPos.z * PixelsToUnits);
+            return ConvertAnimationPosition(bbPos, DefaultImportScale);
+        }
+
+        /// <summary>Convert an animation position using a custom import scale.</summary>
+        public static Vector3 ConvertAnimationPosition(Vector3 bbPos, float importScale)
+        {
+            return new Vector3(-bbPos.x * importScale, bbPos.y * importScale, bbPos.z * importScale);
         }
 
         /// <summary>

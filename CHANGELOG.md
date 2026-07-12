@@ -9,6 +9,13 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 - Replaced the README banner and checkmark mark with the Blockbench bench motif in Unity's black-and-white palette.
 - Rewrote the public and UPM documentation in a shorter, more direct maintainer voice.
 - Moved GitHub community files under `.github/` and package guidance under `Documentation~/` so Unity ignores them.
+- Moved governance, maintainer, and release-process documents under `.github/`.
+- Renamed **Units Per Pixel** to **Import Scale** and baked the conversion into generated spatial data so prefab roots keep unit scale.
+
+### Added
+
+- Added `BlockbenchImporter.OnPostBlockbenchImport` for deterministic scripted customization of generated roots and sub-assets during import.
+- Added a Package Manager sample demonstrating opt-in post-import component, material, and sub-asset customization.
 
 ## [1.0.0] - 2026-07-12
 

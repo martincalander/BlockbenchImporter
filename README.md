@@ -56,9 +56,13 @@ There is no published version tag yet, so this currently follows `main`. Once re
 
 Select the `.bbmodel` in the Project window to change its import settings. Press **Apply** when you are done. The source file is never rewritten, and embedded data stays inside the imported asset.
 
+Projects that need custom generated components, material changes, or additional sub-assets can subscribe to `BlockbenchImporter.OnPostBlockbenchImport` from an `AssetPostprocessor`. See [scripted post-processing](Documentation~/importing-models.md#scripted-post-processing).
+
+The Package Manager includes a **Post-Import Customization** sample with a working model and documented callback implementation.
+
 The useful settings are:
 
-- **Units Per Pixel** — model scale; the default is `0.0625`
+- **Import Scale** — Unity units per Blockbench model unit; the default `0.0625` matches Blockbench's 16-units-per-meter export convention
 - **Include Hidden / Non-Exported Elements** — bring in authoring-only content
 - **Material Mode** — Unlit for Blockbench-like color, or Lit for scene lighting
 - **Texture Filter / Wrap** — Point and Clamp by default

@@ -6,7 +6,7 @@ Unity cannot find the shader used by the generated material. Check **Material Mo
 
 ## The scale is wrong
 
-Check **Units Per Pixel**. The default is `0.0625`, or sixteen Blockbench pixels per Unity unit.
+Check **Import Scale**. The default is `0.0625`, or sixteen Blockbench model units per Unity unit. Texture resolution does not determine model scale.
 
 ## A texture is missing
 

@@ -27,5 +27,12 @@
     "url": "https://martincalander.com",
     "email": "martin.calander@gmail.com"
   },
+  "samples": [
+    {
+      "displayName": "Post-Import Customization",
+      "description": "Customize generated Blockbench roots, materials, and sub-assets through OnPostBlockbenchImport.",
+      "path": "Samples~/PostImportCustomization"
+    }
+  ],
   "hideInEditor": false
 }

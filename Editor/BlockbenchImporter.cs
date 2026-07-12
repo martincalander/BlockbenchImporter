@@ -4,16 +4,19 @@ using System.IO;
 using Essentials.BlockbenchImporter.Builders;
 using Essentials.BlockbenchImporter.Model;
 using Essentials.BlockbenchImporter.Parsing;
+using Essentials.BlockbenchImporter.Utils;
 using UnityEditor;
 using UnityEditor.AssetImporters;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Essentials.BlockbenchImporter
 {
     [ScriptedImporter(20, "bbmodel")]
     public sealed class BlockbenchImporter : ScriptedImporter
     {
-        [SerializeField, Min(0.000001f)] private float unitsPerPixel = 1f / 16f;
+        [FormerlySerializedAs("unitsPerPixel")]
+        [SerializeField, Min(0.000001f)] private float importScale = CoordinateConverter.DefaultImportScale;
         [SerializeField] private bool importTextures = true;
         [SerializeField] private bool importAnimations = true;
         [SerializeField] private bool createAnimatorController = true;
@@ -27,6 +30,50 @@ namespace Essentials.BlockbenchImporter
         [SerializeField] private bool importBoundingBoxesAsColliders = true;
         [SerializeField] private bool generateBackfacesForDoubleSidedTextures;
 
+        /// <summary>
+        /// Arguments supplied after a Blockbench model and all of its generated sub-assets have been imported.
+        /// </summary>
+        public readonly struct ImportEventArgs
+        {
+            /// <summary>The importer that fired the callback.</summary>
+            public readonly BlockbenchImporter importer;
+
+            /// <summary>The active import context. Use it to inspect or add generated sub-assets.</summary>
+            public readonly AssetImportContext context;
+
+            /// <summary>The generated root GameObject registered as the main asset.</summary>
+            public readonly GameObject rootObject;
+
+            internal ImportEventArgs(BlockbenchImporter importer, AssetImportContext context, GameObject rootObject)
+            {
+                this.importer = importer;
+                this.context = context;
+                this.rootObject = rootObject;
+            }
+        }
+
+        /// <summary>Delegate used by Blockbench import callbacks.</summary>
+        /// <param name="args">The importer, active context, and generated root object.</param>
+        public delegate void BlockbenchImportEventHandler(ImportEventArgs args);
+
+        /// <summary>
+        /// Callback fired at the end of a successful Blockbench import, after the main object and generated
+        /// textures, materials, meshes, animation clips, and Animator Controller have been registered.
+        /// Subscribe from <c>AssetPostprocessor.OnPreprocessAsset</c> for the current importer instance.
+        /// </summary>
+        public BlockbenchImportEventHandler OnPostBlockbenchImport { get; set; }
+
+        /// <summary>Unity units generated for one Blockbench model unit.</summary>
+        public float ImportScale
+        {
+            get => importScale;
+            set
+            {
+                importScale = Mathf.Max(0.000001f, value);
+                EditorUtility.SetDirty(this);
+            }
+        }
+
         public override void OnImportAsset(AssetImportContext context)
         {
             try
@@ -34,7 +81,7 @@ namespace Essentials.BlockbenchImporter
                 BbModel model = BbModelParser.Parse(File.ReadAllText(context.assetPath));
                 var settings = new BlockbenchImporterSettings
                 {
-                    unitsPerPixel = Mathf.Max(0.000001f, unitsPerPixel),
+                    importScale = Mathf.Max(0.000001f, importScale),
                     importTextures = importTextures,
                     importAnimations = importAnimations,
                     createAnimatorController = createAnimatorController,
@@ -95,6 +142,8 @@ namespace Essentials.BlockbenchImporter
                         }
                     }
                 }
+
+                OnPostBlockbenchImport?.Invoke(new ImportEventArgs(this, context, root));
             }
             catch (Exception exception)
             {
@@ -153,8 +202,9 @@ namespace Essentials.BlockbenchImporter
         {
             serializedObject.Update();
             EditorGUILayout.LabelField("Geometry", EditorStyles.boldLabel);
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("unitsPerPixel"),
-                new GUIContent("Units Per Pixel", "1/16 matches Blockbench's default glTF export scale."));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("importScale"),
+                new GUIContent("Import Scale",
+                    "Unity units generated for one Blockbench model unit. The default 0.0625 matches Blockbench's 16-units-per-meter export convention."));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("includeHiddenElements"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("includeNonExportedElements"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("importBoundingBoxesAsColliders"));

@@ -35,7 +35,6 @@ namespace Essentials.BlockbenchImporter.Builders
         public GameObject BuildHierarchy()
         {
             var root = new GameObject(BlockbenchImporter.Sanitize(model.name ?? "Blockbench Model"));
-            root.transform.localScale = Vector3.one * settings.unitsPerPixel;
             BuildChildren(BbModelParser.BuildHierarchy(model), root.transform, string.Empty, Vector3.zero);
             BuildArmatures();
             return root;
@@ -65,7 +64,7 @@ namespace Essentials.BlockbenchImporter.Builders
             var gameObject = new GameObject(name);
             gameObject.transform.SetParent(parent, false);
             Vector3 origin = CoordinateConverter.ConvertPositionRaw(group.origin);
-            gameObject.transform.localPosition = origin - parentOrigin;
+            gameObject.transform.localPosition = (origin - parentOrigin) * settings.importScale;
             gameObject.transform.localRotation = CoordinateConverter.ConvertRotation(group.rotation);
 
             string path = CombinePath(parentPath, name);
@@ -86,7 +85,7 @@ namespace Essentials.BlockbenchImporter.Builders
 
             float[] sourceOrigin = element.position ?? element.origin;
             Vector3 origin = CoordinateConverter.ConvertPositionRaw(sourceOrigin);
-            gameObject.transform.localPosition = origin - parentOrigin;
+            gameObject.transform.localPosition = (origin - parentOrigin) * settings.importScale;
             gameObject.transform.localRotation = CoordinateConverter.ConvertRotation(element.rotation);
             if (element.scale != null && element.scale.Length >= 3)
                 gameObject.transform.localScale = new Vector3(element.scale[0], element.scale[1], element.scale[2]);
@@ -119,13 +118,13 @@ namespace Essentials.BlockbenchImporter.Builders
                     if (settings.importBoundingBoxesAsColliders)
                     {
                         var collider = gameObject.AddComponent<BoxCollider>();
-                        collider.center = CoordinateConverter.ConvertPositionRaw(
+                        collider.center = (CoordinateConverter.ConvertPositionRaw(
                             (element.from[0] + element.to[0]) * 0.5f,
                             (element.from[1] + element.to[1]) * 0.5f,
-                            (element.from[2] + element.to[2]) * 0.5f);
+                            (element.from[2] + element.to[2]) * 0.5f) - origin) * settings.importScale;
                         collider.size = new Vector3(Mathf.Abs(element.to[0] - element.from[0]),
                             Mathf.Abs(element.to[1] - element.from[1]),
-                            Mathf.Abs(element.to[2] - element.from[2]));
+                            Mathf.Abs(element.to[2] - element.from[2])) * settings.importScale;
                     }
                     break;
                 case "texture_mesh":
@@ -138,6 +137,7 @@ namespace Essentials.BlockbenchImporter.Builders
 
             if (result != null && result.mesh != null)
             {
+                ApplyImportScale(result.mesh);
                 result.mesh.name = name;
                 meshes.Add(result.mesh);
                 gameObject.AddComponent<MeshFilter>().sharedMesh = result.mesh;
@@ -147,6 +147,15 @@ namespace Essentials.BlockbenchImporter.Builders
                 builtElements[element.uuid] = new BuiltElement(element, gameObject, result);
             if (node.children.Count != 0)
                 BuildChildren(node.children, gameObject.transform, path, origin);
+        }
+
+        private void ApplyImportScale(Mesh mesh)
+        {
+            Vector3[] vertices = mesh.vertices;
+            for (int index = 0; index < vertices.Length; index++)
+                vertices[index] *= settings.importScale;
+            mesh.vertices = vertices;
+            mesh.RecalculateBounds();
         }
 
         private void BuildArmatures()

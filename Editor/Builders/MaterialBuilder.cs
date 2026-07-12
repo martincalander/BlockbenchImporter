@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Essentials.BlockbenchImporter.Model;
+using Essentials.BlockbenchImporter.Utils;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -426,7 +427,7 @@ namespace Essentials.BlockbenchImporter.Builders
     [Serializable]
     public class BlockbenchImporterSettings
     {
-        public float unitsPerPixel = 1f / 16f;
+        public float importScale = CoordinateConverter.DefaultImportScale;
         public bool importAnimations = true;
         public bool createAnimatorController = true;
         public bool importTextures = true;

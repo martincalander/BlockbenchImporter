@@ -76,9 +76,11 @@ node_modules/
 __pycache__/
 *.py[cod]
 
-# UPM reserves Documentation~ for package manuals; override global editor-backup rules.
+# UPM reserves Documentation~ and Samples~ for package content; override global editor-backup rules.
 !Documentation~/
 !Documentation~/**
+!Samples~/
+!Samples~/**
 
 # Local assistant/tool output
 /.codex/

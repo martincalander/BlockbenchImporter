@@ -14,6 +14,7 @@ Other useful pages:
 - [How the importer works](architecture.md)
 - [Roadmap](roadmap.md)
 - [Changelog](../CHANGELOG.md)
+- **Post-Import Customization sample** — import it from the package's Samples tab in Unity Package Manager
 
 - Package ID: `com.essentials.blockbenchimporter`
 - Minimum Unity version: `2021.3`

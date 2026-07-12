@@ -16,7 +16,7 @@ Select the `.bbmodel` in the Project window. Change a setting, then press **Appl
 
 ### Geometry
 
-- **Units Per Pixel** sets the scale. At the default `0.0625`, sixteen Blockbench pixels equal one Unity unit.
+- **Import Scale** sets the number of Unity units generated for each Blockbench model unit. The default `0.0625` means sixteen Blockbench units equal one Unity unit, matching Blockbench's default 3D export convention. The scale is baked into generated transforms, meshes, colliders, skinning, and position animation while the prefab root remains at `(1, 1, 1)`.
 - **Include Hidden Elements** includes things hidden in the Blockbench editor.
 - **Include Non-Exported Elements** includes things with export turned off.
 - **Generate Colliders** turns supported bounding boxes into `BoxCollider` components.
@@ -43,3 +43,47 @@ Numeric position, rotation, and scale tracks support linear, stepped, Catmull-Ro
 Commit the `.bbmodel`, its `.meta` file, and every external texture it needs. Pin the importer to a release tag in `manifest.json` so everyone gets the same result.
 
 When reporting a visual bug, a Blockbench screenshot and a very small model are much more useful than a large production file.
+
+## Scripted post-processing
+
+`BlockbenchImporter.OnPostBlockbenchImport` runs after the generated hierarchy and all sub-assets have been registered. Subscribe from an `AssetPostprocessor` to customize the current import without editing the package:
+
+```csharp
+using System.Collections.Generic;
+using Essentials.BlockbenchImporter;
+using UnityEditor;
+using UnityEngine;
+
+internal sealed class MyBlockbenchPostprocessor : AssetPostprocessor
+{
+    private void OnPreprocessAsset()
+    {
+        if (!(assetImporter is BlockbenchImporter importer))
+            return;
+
+        // Importer instances can be reused, so make the subscription idempotent.
+        importer.OnPostBlockbenchImport -= OnPostBlockbenchImport;
+        importer.OnPostBlockbenchImport += OnPostBlockbenchImport;
+    }
+
+    private static void OnPostBlockbenchImport(BlockbenchImporter.ImportEventArgs args)
+    {
+        if (!args.rootObject.TryGetComponent<BoxCollider>(out _))
+            args.rootObject.AddComponent<BoxCollider>();
+
+        var importedObjects = new List<Object>();
+        args.context.GetObjects(importedObjects);
+        foreach (Object importedObject in importedObjects)
+        {
+            if (importedObject is Material material)
+                material.enableInstancing = true;
+        }
+    }
+}
+```
+
+The callback receives the `BlockbenchImporter`, active `AssetImportContext`, and generated root `GameObject`. It can change generated components and assets, inspect registered objects with `context.GetObjects`, add deterministic sub-assets with `context.AddObjectToAsset`, and report warnings or errors through the context.
+
+Keep callbacks deterministic and limit them to the asset currently being imported. An exception from a callback is treated as an import failure so partially customized output is not silently accepted.
+
+For a complete working example, import **Post-Import Customization** from the package's **Samples** tab in Unity Package Manager. It demonstrates an opt-in filename rule, modifying generated materials, adding a component to the root, and registering an additional text sub-asset.

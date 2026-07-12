@@ -45,6 +45,11 @@ def validate_manifest() -> None:
         if not manifest.get(key):
             fail(f"package.json: missing {key!r}")
 
+    samples = manifest.get("samples", [])
+    if not any(sample.get("path") == "Samples~/PostImportCustomization" for sample in samples
+               if isinstance(sample, dict)):
+        fail("package.json: missing Post-Import Customization sample declaration")
+
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## [{version}]" not in changelog:
         fail(f"CHANGELOG.md: no release heading for package version {version}")
@@ -64,7 +69,9 @@ def validate_required_files() -> None:
         ".github/CODE_OF_CONDUCT.md",
         ".github/SECURITY.md",
         ".github/SUPPORT.md",
-        "GOVERNANCE.md",
+        ".github/GOVERNANCE.md",
+        ".github/MAINTAINERS.md",
+        ".github/RELEASING.md",
         "package.json",
         "Documentation~/index.md",
         "Documentation~/installation.md",
@@ -74,6 +81,10 @@ def validate_required_files() -> None:
         "Documentation~/architecture.md",
         "Documentation~/roadmap.md",
         "Documentation~/Images/logo-mark.svg",
+        "Samples~/PostImportCustomization/BlockbenchImportMarker.cs",
+        "Samples~/PostImportCustomization/Editor/BlockbenchPostprocessorExample.cs",
+        "Samples~/PostImportCustomization/SampleBird.postprocess.bbmodel",
+        "Samples~/PostImportCustomization/README.md",
     )
     for relative in required:
         if not (ROOT / relative).is_file():
