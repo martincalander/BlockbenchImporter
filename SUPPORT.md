@@ -1,20 +1,18 @@
-# Support
+# Getting help
 
-## Get help
+Start with the [manual](Documentation~/index.md) and [troubleshooting page](Documentation~/troubleshooting.md). It is also worth searching the [issue tracker](https://github.com/martincalander/UnityBlockbenchImporter/issues); someone may already have hit the same problem.
 
-1. Read the [manual](Documentation~/index.md) and [troubleshooting guide](Documentation~/troubleshooting.md).
-2. Search [existing issues](https://github.com/martincalander/UnityBlockbenchImporter/issues).
-3. Ask a usage question in [GitHub Discussions](https://github.com/martincalander/UnityBlockbenchImporter/discussions) when available.
-4. If the behavior is reproducible and appears to be a defect, open a bug report.
+For a question, use [GitHub Discussions](https://github.com/martincalander/UnityBlockbenchImporter/discussions) if it is enabled. For a reproducible importer bug, open an issue.
 
-For a useful report, include the package version, Unity version, render pipeline, operating system, importer settings, relevant Console output, and a minimal redistributable `.bbmodel`. Include screenshots of both Blockbench and Unity for visual-fidelity issues.
+Please include:
 
-## Response expectations
+- package and Unity versions;
+- render pipeline and operating system;
+- any import settings you changed;
+- the relevant Console output;
+- a small `.bbmodel` you are allowed to share;
+- Blockbench and Unity screenshots for visual problems.
 
-This is an independently maintained open-source project, not a paid support service. Issues are triaged by impact, reproducibility, safety, and maintainer availability. A response time is not guaranteed. Security reports follow the acknowledgement target in [SECURITY.md](SECURITY.md).
+This is a small project maintained in spare time, so replies may take a while. Public questions are preferred because the answer can help the next person too. Keep security reports private using [SECURITY.md](SECURITY.md).
 
-Please do not send ordinary support requests to the security channel or the maintainer's private email. Public questions create searchable answers for everyone.
-
-## Scope
-
-The project can help with importer behavior and documented package features. General Unity, C#, Blockbench modeling, custom shader, and third-party plugin support may be redirected to the relevant community.
+The issue tracker is for this importer. General Unity, C#, Blockbench modeling, shader, and third-party plugin questions are usually better asked in those projects' own communities.

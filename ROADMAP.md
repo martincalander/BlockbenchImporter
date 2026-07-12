@@ -1,20 +1,18 @@
 # Roadmap
 
-The roadmap communicates direction, not a delivery promise. Accepted work is tracked in [GitHub issues](https://github.com/martincalander/UnityBlockbenchImporter/issues) and prioritized according to fidelity impact, safety, reproducibility, and maintenance cost.
+This is the rough direction, not a promise or schedule.
 
-## Current priorities
+- Add more small, redistributable test models.
+- Test imports across more Unity versions.
+- Make warnings for plugin-defined data more useful.
+- Check generated materials in more render pipelines.
+- Add texture meshes, splines, PBR packing, and animated textures when their Blockbench behavior can be reproduced properly.
 
-- Expand real-world format fixtures without committing proprietary artwork.
-- Strengthen cross-version Unity import and animation tests.
-- Improve diagnostics for plugin-defined and partially supported model data.
-- Validate additional render-pipeline material behavior.
-- Add specialized geometry only where Blockbench semantics can be represented faithfully and safely.
+Some things are deliberately out of scope:
 
-## Non-goals
+- running Molang or arbitrary plugin code from an asset;
+- replacing Blockbench as an editor;
+- guessing silently when an element is unknown;
+- requiring a hosted service to use imported models.
 
-- Executing Molang or arbitrary plugin expressions from imported assets.
-- Replacing Blockbench as an editor.
-- Silently approximating unknown elements without diagnostics.
-- Coupling generated assets to a proprietary runtime service.
-
-Feature proposals should follow [CONTRIBUTING.md](CONTRIBUTING.md) and include a source-format analysis plus a testable Unity mapping.
+If you want to work on one of these areas, open an issue and read [CONTRIBUTING.md](CONTRIBUTING.md).

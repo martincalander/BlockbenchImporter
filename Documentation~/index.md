@@ -1,27 +1,21 @@
 # Blockbench Importer manual
 
-Unity Blockbench Importer turns a Blockbench `.bbmodel` project into a native, prefab-like Unity asset. The imported hierarchy, meshes, textures, materials, animation clips, and optional Animator Controller are stored as sub-assets and update whenever the source model is reimported.
+This package teaches Unity how to read `.bbmodel` files. Save in Blockbench, switch back to Unity, and the asset updates.
 
-## Start here
+If you are new to the package:
 
-1. [Install the package](installation.md).
-2. [Import your first model](importing-models.md).
-3. Check the [format support matrix](format-support.md) when a project uses advanced or plugin-defined features.
+1. [Install it](installation.md).
+2. [Import a model](importing-models.md).
+3. Check [format support](format-support.md) if part of the model is missing or looks wrong.
 
-## Guides
+Other useful pages:
 
-- [Installation and upgrades](installation.md)
-- [Importing models and importer settings](importing-models.md)
-- [Format support and intentional boundaries](format-support.md)
 - [Troubleshooting](troubleshooting.md)
-- [Architecture, data flow, and safety model](architecture.md)
-
-## Package information
+- [How the importer works](architecture.md)
+- [Changelog](../CHANGELOG.md)
 
 - Package ID: `com.essentials.blockbenchimporter`
 - Minimum Unity version: `2021.3`
-- License: [Apache License 2.0](../LICENSE.md)
 - Maintainer: [Martin Calander](https://martincalander.com)
-- Issues: [GitHub issue tracker](https://github.com/martincalander/UnityBlockbenchImporter/issues)
 
-Unity and Blockbench are third-party trademarks. This is an independent open-source project and is not endorsed by either product owner.
+Found a bug? [Open an issue](https://github.com/martincalander/UnityBlockbenchImporter/issues).

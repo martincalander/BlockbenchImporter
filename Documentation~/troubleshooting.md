@@ -2,35 +2,41 @@
 
 ## The model is pink
 
-Pink usually means the generated material's shader is unavailable in the active render pipeline. Confirm the importer Material Mode, then reimport. If a pipeline was installed or changed after the first import, select the `.bbmodel` and choose **Reimport**.
+Unity cannot find the shader used by the generated material. Check **Material Mode** and reimport the `.bbmodel`. If you changed render pipelines after importing it, reimport once the new pipeline is ready.
 
 ## The scale is wrong
 
-Check **Units Per Pixel**. The default `0.0625` maps sixteen Blockbench pixels to one Unity unit. A project authored for a different export scale needs a matching value.
+Check **Units Per Pixel**. The default is `0.0625`, or sixteen Blockbench pixels per Unity unit.
 
 ## A texture is missing
 
-- Prefer embedded textures for portable source models.
-- For external textures, verify the path stored in the `.bbmodel` and keep the file accessible beside the project.
-- Check the Console for the exact unresolved path.
-- Reimport after moving either the model or its textures.
+- Check the Console for the path Unity tried to read.
+- Make sure an external texture moved with the `.bbmodel`.
+- Reimport after moving either file.
+- Embed the texture in Blockbench if the project needs to move between machines often.
 
-## An element is absent
+## An element is missing
 
-Check whether it is hidden or has its export flag disabled in Blockbench, then inspect **Include Hidden Elements** and **Include Non-Exported Elements**. Plugin-defined elements may be preserved only as transforms; the Console will explain that case.
+Was it hidden or marked not to export in Blockbench? Enable **Include Hidden Elements** or **Include Non-Exported Elements** if you want it anyway.
 
-## An animation does not move the expected object
+Plugin-defined elements may only appear as transforms for now. The Console warning will say so.
 
-Use unique source names and avoid renaming generated children in an instance. Confirm that **Import Animations** is enabled. If clips exist but no controller is attached, enable **Create Animator Controller** or connect the clips to your own controller.
+## An animation targets the wrong object
 
-## The Blockbench and Unity views differ
+Use unique names in the Blockbench outliner and avoid renaming generated children in a scene instance. Make sure **Import Animations** is enabled.
 
-Compare with an Unlit material first; scene lighting, tone mapping, fog, post-processing, and color space can all change a Lit result. Also confirm texture filtering, alpha mode, camera projection, and billboard mode.
+If the clips exist but nothing plays them, enable **Create Animator Controller** or add the clips to your own controller.
 
-## The Console reports Molang or an unknown element
+## It looks different from Blockbench
 
-This is intentional. The importer does not execute expressions embedded in asset files. Unknown/plugin-defined element data is retained structurally where possible and reported. Bake the result to numeric keyframes or supported geometry in Blockbench before import.
+Try **Unlit** first. Unity lighting, color space, tone mapping, fog, post-processing, texture filtering, and camera projection can all change the result even when the mesh and UVs are correct.
+
+Also check alpha mode and billboard mode.
+
+## Molang or unknown-element warnings
+
+The importer does not run expressions from asset files. Bake expression-driven animation to numeric keyframes in Blockbench. Unknown plugin geometry needs a dedicated importer implementation before Unity can render it.
 
 ## Still stuck?
 
-Search [existing issues](https://github.com/martincalander/UnityBlockbenchImporter/issues), then use the bug-report form. Include a minimal, redistributable model and the Unity Editor log excerpt around the import warning. See [SUPPORT.md](../SUPPORT.md) for response expectations.
+Search the [issues](https://github.com/martincalander/UnityBlockbenchImporter/issues), then open a bug report. A tiny model you can legally share, the relevant Console lines, and matching Blockbench/Unity screenshots are ideal.

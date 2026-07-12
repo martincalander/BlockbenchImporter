@@ -3,8 +3,8 @@
 Unity Blockbench Importer
 Copyright © 2026 Martin Calander
 
-This product includes software originally created and maintained by Martin Calander.
+Unity Blockbench Importer was created and is maintained by Martin Calander.
 
-The product name and this attribution notice identify the origin of the work. They do not modify the terms of the Apache License 2.0.
+This is an attribution notice only. It does not change the Apache License 2.0.
 
-Unity is a trademark of Unity Technologies. Blockbench is a trademark of its respective owner. Unity Blockbench Importer is an independent project and is not affiliated with, endorsed by, or sponsored by Unity Technologies or Blockbench.
+Unity and Blockbench are trademarks of their respective owners. This is an independent project and is not endorsed by either of them.

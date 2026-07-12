@@ -1,17 +1,15 @@
 # Releasing
 
-Only a maintainer with repository release access can publish an official version.
+Official releases are published by the maintainer.
 
-## Checklist
-
-1. Confirm the working tree contains only intended changes.
-2. Run Unity EditMode tests and confirm a clean compilation.
+1. Start from a clean working tree.
+2. Compile in Unity and run the EditMode tests.
 3. Run `python3 .github/scripts/validate_package.py`.
-4. Update `package.json` using semantic versioning.
-5. Move relevant notes into a dated `CHANGELOG.md` section with the same version.
-6. Merge the release-ready changes to `main`.
-7. Create and push an annotated tag named `v<package-version>`.
+4. Set the new version in `package.json`.
+5. Add the same version and date to `CHANGELOG.md`.
+6. Merge to `main`.
+7. Create and push an annotated `v<version>` tag.
 
-The release workflow verifies the tag/version match, packages the UPM repository, generates a SHA-256 checksum, and creates the GitHub release. Inspect the archive and checksum before announcing the release.
+The release workflow checks the tag, builds the UPM archive, writes a SHA-256 checksum, and creates the GitHub release. Download the result and inspect it before announcing it.
 
-Never retag or replace a published version. Correct a bad release with a new patch version and explain the issue in the changelog.
+Do not move a published tag. If a release is bad, publish a new patch version and explain what happened in the changelog.

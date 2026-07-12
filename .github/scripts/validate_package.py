@@ -73,8 +73,6 @@ def validate_required_files() -> None:
         "Documentation~/troubleshooting.md",
         "Documentation~/architecture.md",
         "Documentation~/Images/logo-mark.svg",
-        "Documentation~/Images/hero.svg",
-        "Documentation~/Images/import-pipeline.svg",
     )
     for relative in required:
         if not (ROOT / relative).is_file():

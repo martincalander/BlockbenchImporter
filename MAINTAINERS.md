@@ -1,7 +1,5 @@
-# Maintainers
+# Maintainer
 
-| Maintainer | Responsibilities | Contact |
-|---|---|---|
-| [Martin Calander](https://martincalander.com) | Project direction, releases, security, reviews, and package stewardship | `martin.calander@gmail.com` |
+[Martin Calander](https://martincalander.com) maintains the importer, reviews changes, publishes releases, and handles security reports.
 
-For ordinary support, use the public channels described in [SUPPORT.md](SUPPORT.md). Use the private channel in [SECURITY.md](SECURITY.md) only for vulnerabilities or sensitive security material.
+For normal questions, please use the channels in [SUPPORT.md](SUPPORT.md). For a vulnerability, follow [SECURITY.md](SECURITY.md) or email `martin.calander@gmail.com`.

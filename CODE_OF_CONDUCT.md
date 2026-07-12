@@ -1,5 +1,7 @@
 # Contributor Covenant Code of Conduct
 
+Short version: be kind, talk about the work, and do not make the project unpleasant or unsafe for other people. The fuller rules are below so there is no guesswork if something goes wrong.
+
 ## Our pledge
 
 We pledge to make participation in this project a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, experience level, education, socio-economic status, nationality, personal appearance, race, caste, color, religion, sexual identity and orientation, or technical preference.
@@ -14,7 +16,7 @@ Unacceptable behavior includes sexualized language or attention, trolling or ins
 
 ## Enforcement responsibilities
 
-Project maintainers are responsible for clarifying and enforcing these standards. They may remove, edit, or reject comments, commits, code, issues, and other contributions that are inconsistent with this Code of Conduct.
+The maintainer is responsible for enforcing these standards and may remove or reject contributions that break them.
 
 ## Scope
 
@@ -22,7 +24,7 @@ This Code applies in project spaces and when an individual officially represents
 
 ## Enforcement
 
-Report abusive, harassing, or otherwise unacceptable behavior to `martin.calander@gmail.com`. Reports will be reviewed promptly, fairly, and with respect for the reporter's privacy. The maintainer will determine corrective action proportionate to the circumstances, which may include a warning, temporary restriction, or permanent ban from project interaction.
+Report abusive, harassing, or otherwise unacceptable behavior to `martin.calander@gmail.com`. Reports will be handled privately. Depending on what happened, the response may be a warning, a temporary restriction, or a permanent ban from the project.
 
 ## Attribution
 

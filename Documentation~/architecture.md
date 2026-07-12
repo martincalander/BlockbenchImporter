@@ -1,36 +1,36 @@
-# Architecture and safety model
+# How the importer works
 
-## Import flow
+The import is split into a few ordinary steps:
 
-1. Unity's `ScriptedImporter` receives the `.bbmodel` source.
-2. The tolerant JSON parser maps known format fields into internal data models.
-3. A coordinate converter consistently translates Blockbench vectors, rotations, normals, and winding into Unity space.
-4. Specialized builders generate the hierarchy, meshes, materials, skinning, animation clips, and optional controller.
-5. Generated objects are attached to the import context as deterministic sub-assets.
-6. Unsupported but structurally safe data emits contextual warnings.
+1. `ScriptedImporter` receives the `.bbmodel`.
+2. The parser reads its JSON into small internal model classes.
+3. `CoordinateConverter` handles the Blockbench-to-Unity axis conversion.
+4. Builders create the hierarchy, meshes, materials, skinning, and animation.
+5. Unity stores the results as sub-assets of the imported model.
 
-The builders are intentionally separated from parsing. Format compatibility decisions belong in the parser/model layer; Unity object construction belongs in builders; coordinate-system rules remain centralized.
+Parsing and Unity object creation are kept apart on purpose. A format change should not require mesh-building code to understand raw JSON, and coordinate conversion should not be reimplemented in several places.
 
-## Safety boundaries
+## Asset safety
 
-- Input is treated as untrusted data, not code.
-- Molang and plugin expressions are never evaluated.
-- The importer never rewrites the source model.
-- Embedded textures are decoded in memory and stored as imported sub-assets.
-- External texture references are read only when a path resolves; missing files produce diagnostics.
-- Generated objects remain inside the imported asset rather than scattering files through the project.
-- Unknown element types do not invoke reflection or dynamically load plugin code.
+The file is data, not code:
 
-Do not weaken these boundaries to make one model import. New executable formats require a separate security design and maintainer approval.
+- Molang and plugin expressions are not evaluated.
+- Blockbench plugins and managed assemblies are not loaded.
+- The source `.bbmodel` is never rewritten.
+- Embedded textures are decoded in memory.
+- Missing external textures produce warnings.
+- Unknown elements are kept as named transforms when that is useful.
 
-## Extending support
+Please do not work around one model by weakening those rules.
 
-For each new Blockbench field or element type:
+## Adding format support
 
-1. Document the source semantics and coordinate space.
-2. Add parser/model coverage for missing, malformed, and valid data.
-3. Implement the smallest dedicated builder or converter change.
-4. Add a geometry or integration regression test.
-5. Update the [format support matrix](format-support.md) and [changelog](../CHANGELOG.md).
+When adding a field or element type:
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for the complete workflow.
+1. Find out exactly how Blockbench stores and evaluates it.
+2. Add parser coverage for valid, missing, and malformed data.
+3. Put the Unity conversion in the appropriate builder.
+4. Add a geometry or import test.
+5. Update [format support](format-support.md) and the [changelog](../CHANGELOG.md).
+
+The rest of the development setup is in [CONTRIBUTING.md](../CONTRIBUTING.md).

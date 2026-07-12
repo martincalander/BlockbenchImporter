@@ -1,24 +1,26 @@
 # Changelog
 
-All notable changes to Unity Blockbench Importer are documented here. The project follows [Semantic Versioning](https://semver.org/) where practical.
+Changes are listed here by release. Versions follow [Semantic Versioning](https://semver.org/) where practical.
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Changed
+
+- Replaced the README banner and checkmark mark with a smaller voxel-assembly logo.
+- Rewrote the public and UPM documentation in a shorter, more direct maintainer voice.
 
 ## [1.0.0] - 2026-07-12
 
 ### Added
 
-- Faithful Blockbench project format 5 import through Unity's Scripted Importer.
+- Blockbench project format 5 import through Unity's Scripted Importer.
 - Shared-space pivot hierarchy construction, cube inflate/stretch, face enablement, face UV rotation, and concave polygon triangulation.
 - Embedded and external texture import, unlit fidelity materials, alpha controls, per-face assignments, and double-sided handling.
 - Weighted armature skinning, camera-facing billboards, marker-color materials, locator/null preservation, and optional bounding-box colliders.
 - Position, rotation, and scale animation clips with linear, stepped, Catmull-Rom, and Bezier interpolation plus optional Animator Controller generation.
 - Parser, geometry, and full importer EditMode regression tests.
-- Complete UPM manual, format-support matrix, troubleshooting, architecture, contribution, support, governance, security, and release documentation.
-- Original project identity, public landing graphics, issue forms, pull-request template, CODEOWNERS, and citation metadata.
-- Package validation, dependency review, CodeQL analysis, Dependabot, and checksum-producing release automation.
+- UPM manual, contribution guide, support notes, and security reporting instructions.
+- GitHub issue forms, pull-request template, package checks, CodeQL, Dependabot, and tagged release archives with checksums.
 
 ### Changed
 

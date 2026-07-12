@@ -1,7 +1,7 @@
 # Third-party notices
 
-The Unity Blockbench Importer package does not currently redistribute third-party source code, binaries, fonts, or model assets.
+The package does not currently ship third-party code, binaries, fonts, or model assets.
 
-Unity and Blockbench are referenced only to describe compatibility. Their names and marks belong to their respective owners, and no endorsement is implied.
+Unity and Blockbench are named only to explain what the importer works with. Their names and marks belong to their owners; no endorsement is implied.
 
-If a future contribution introduces a redistributable dependency or asset, its license and required attribution must be reviewed and recorded here before release.
+If a dependency or asset is bundled later, its license and required credit belong in this file before release.

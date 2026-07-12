@@ -1,26 +1,22 @@
-## Summary
+## What changed?
 
-<!-- What changed, and why is this the smallest complete solution? -->
+<!-- A short explanation is enough. -->
 
-## Blockbench → Unity semantics
+## How should Blockbench data map to Unity?
 
-<!-- For importer changes, explain the source-format behavior and its Unity representation. -->
+<!-- Needed for importer changes. Delete this section for docs or housekeeping. -->
 
-## Validation
+## What did you check?
 
-- [ ] The package compiles without new warnings.
-- [ ] Relevant Unity EditMode tests pass.
-- [ ] I added or updated regression coverage for behavior changes.
-- [ ] I reimported affected models twice and checked deterministic output.
-- [ ] `python3 .github/scripts/validate_package.py` passes.
-- [ ] Documentation and `CHANGELOG.md` reflect user-visible changes.
-- [ ] Fixtures and assets are redistributable and their origin is documented.
-- [ ] This change does not execute expressions or plugin code from imported assets.
+- [ ] Unity compiles without new warnings
+- [ ] Relevant EditMode tests pass
+- [ ] A behavior change has a regression test or small shareable model
+- [ ] Reimporting twice gives the same result
+- [ ] `python3 .github/scripts/validate_package.py` passes
+- [ ] User-facing changes are in the docs and changelog
+- [ ] Any added fixture or asset can legally be redistributed
+- [ ] Imported files still cannot run expressions or plugin code
 
-## Visual evidence
+Screenshots from matching Blockbench and Unity views are very helpful for visual fixes.
 
-<!-- Add before/after Unity and Blockbench screenshots for fidelity changes. Remove if not applicable. -->
-
-## Related issue
-
-<!-- Use "Closes #123" when appropriate. -->
+Closes #

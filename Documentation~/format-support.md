@@ -1,42 +1,42 @@
 # Format support
 
-The importer targets Blockbench project format 5 and reads older compatible fields defensively. “Supported” means the data has a deliberate Unity representation; it does not imply that every custom shader or plugin behaves identically outside Blockbench.
+The importer is written for Blockbench project format 5. It also accepts older fields when their meaning is clear.
 
-## Support matrix
+“Preserved” below means the item still appears in the hierarchy, but Unity cannot render or play all of its data yet.
 
-| Blockbench data | Unity representation | Status |
+| Blockbench data | Unity result | Support |
 |---|---|---|
-| Outliner groups and nested pivots | Transform hierarchy | Supported |
-| Cubes, inflate, stretch, rotation | Mesh sub-assets | Supported |
-| Six cube faces and disabled faces | Submeshes and omitted faces | Supported |
-| Face UV rectangles and 90° rotation | Unity UV coordinates | Supported |
-| Polygon meshes and concave faces | Triangulated Mesh | Supported |
-| Armatures, bones, weights, bind pose | SkinnedMeshRenderer | Supported |
-| Camera-facing billboards | Runtime billboard component | Supported |
-| Embedded PNG textures | Texture2D sub-assets | Supported |
-| Relative/absolute external textures | Texture2D sub-assets | Supported when readable |
-| Per-face textures and materials | Material slots/submeshes | Supported |
-| Locators and null objects | Transform nodes | Supported |
-| Bounding boxes | Transform; optional BoxCollider | Supported |
-| Numeric position/rotation/scale channels | AnimationClip curves | Supported |
-| Linear and stepped interpolation | Animation curves | Supported |
-| Catmull-Rom and Bezier interpolation | Baked Animation curves | Supported |
-| Once and loop playback modes | AnimationClip wrap behavior | Supported |
-| Marker colors | Generated utility materials | Supported |
-| Plugin-defined unknown elements | Transform plus warning | Preserved, not rendered |
-| Texture meshes and splines | Transform plus warning | Geometry not generated |
-| PBR texture groups | Individual textures plus warning | No channel packing |
-| Animated texture atlases | Individual texture plus warning | No runtime playback |
-| Molang/executable expressions | Warning; numeric value resolves to zero | Never executed |
+| Groups and nested pivots | Transform hierarchy | Yes |
+| Cubes, inflate, stretch, rotation | Mesh | Yes |
+| Enabled and disabled cube faces | Generated or omitted faces | Yes |
+| Face UV rectangles and 90° rotation | Mesh UVs | Yes |
+| Polygon meshes and concave faces | Triangulated Mesh | Yes |
+| Bones, weights, and bind poses | SkinnedMeshRenderer | Yes |
+| Camera-facing billboards | Billboard component | Yes |
+| Embedded PNG textures | Texture2D sub-assets | Yes |
+| External textures | Texture2D sub-assets | When the path can be read |
+| Per-face textures | Material slots and submeshes | Yes |
+| Locators and null objects | Transform nodes | Yes |
+| Bounding boxes | Transform; optional BoxCollider | Yes |
+| Numeric position/rotation/scale tracks | AnimationClip curves | Yes |
+| Linear and stepped interpolation | Animation curves | Yes |
+| Catmull-Rom and Bezier interpolation | Baked animation curves | Yes |
+| Once and loop playback | AnimationClip wrap mode | Yes |
+| Marker colors | Simple generated materials | Yes |
+| Unknown plugin elements | Transform and Console warning | Preserved |
+| Texture meshes and splines | Transform and Console warning | Preserved; no mesh yet |
+| PBR texture groups | Separate textures and warning | No channel packing yet |
+| Animated texture atlases | Texture and warning | No playback yet |
+| Molang or other expressions | Warning; value becomes zero | Never executed |
 
-## Coordinate translation
+## Coordinates
 
-Blockbench and Unity use different coordinate conventions. The importer converts positions, rotations, normals, winding, pivots, and animation values together; changing only one of those would produce mirrored geometry or incorrect motion. Element origins are interpreted in Blockbench's shared model space before they are converted into parent-local Unity transforms.
+Blockbench and Unity do not agree on every axis convention. Positions, pivots, rotations, normals, winding, skinning, and animation values have to move together or the model ends up mirrored or animated around the wrong point.
 
-## Diagnostics policy
+Blockbench element origins begin in shared model space. The importer converts them before calculating each Unity child transform.
 
-The importer prefers visible warnings over silent loss. Data with a safe structural representation is preserved as a named transform even when specialized geometry cannot yet be generated. Warnings identify the element or feature so users can simplify the source project or open a focused feature request.
+## When data is not supported
 
-## Reporting a fidelity issue
+The importer warns instead of dropping data without a word. If it can keep a useful named transform, it does. The warning should point to the item that needs attention.
 
-Provide the smallest `.bbmodel` that reproduces the issue, a screenshot from Blockbench, the expected and actual result, Unity version, render pipeline, package version, and importer settings. Remove private textures or proprietary geometry before attaching a file to a public issue.
+If something marked **Yes** imports incorrectly, please send the smallest `.bbmodel` that reproduces it, screenshots from Blockbench and Unity, the package and Unity versions, your render pipeline, and the import settings you changed.

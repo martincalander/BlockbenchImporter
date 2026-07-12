@@ -1,48 +1,33 @@
-# Installation and upgrades
+# Installation
 
-## Requirements
+You need Unity `2021.3` or newer and Git installed on the same machine.
 
-- Unity `2021.3` or newer
-- A Git client available to Unity when installing from Git
-- Blockbench projects saved as `.bbmodel`
+## Package Manager
 
-## Install with Package Manager
-
-In Unity, open **Window → Package Manager**, select **+ → Add package from git URL…**, and enter:
+Open **Window → Package Manager**, click **+ → Add package from git URL…**, and enter:
 
 ```text
 https://github.com/martincalander/UnityBlockbenchImporter.git
 ```
 
-For a reproducible project, pin a release tag:
+There is no published version tag yet, so this URL currently follows `main`. After tagged releases begin, append `#vX.Y.Z` to pin a version.
 
-```text
-https://github.com/martincalander/UnityBlockbenchImporter.git#v1.0.0
-```
+## `manifest.json`
 
-## Install through `manifest.json`
-
-Add this entry to your project's `Packages/manifest.json` dependencies:
+You can also edit `Packages/manifest.json` directly:
 
 ```json
-"com.essentials.blockbenchimporter": "https://github.com/martincalander/UnityBlockbenchImporter.git#v1.0.0"
+"com.essentials.blockbenchimporter": "https://github.com/martincalander/UnityBlockbenchImporter.git"
 ```
 
-Keep the surrounding JSON valid and retain the comma required between dependency entries.
+Remember the comma between entries. Commit both `manifest.json` and `packages-lock.json`.
 
-## Upgrade
+## Updating
 
-Change the tag in `Packages/manifest.json`, then allow Unity to resolve packages. Read the [changelog](../CHANGELOG.md) before moving across minor or major versions. Commit both `manifest.json` and `packages-lock.json` so collaborators receive the same package version.
+Change the tag to the version you want, then let Unity resolve the package. Check the [changelog](../CHANGELOG.md) first when moving to a new minor or major version.
 
-## Remove
+## Removing it
 
-Remove `com.essentials.blockbenchimporter` in Package Manager or delete its entry from `Packages/manifest.json`. Existing `.bbmodel` source files remain untouched, but their imported Unity representations will no longer be available until an importer for that extension is installed.
+Remove the package in Package Manager or delete its line from `manifest.json`. Your `.bbmodel` files are not touched. Unity simply stops knowing how to import them.
 
-## Troubleshooting installation
-
-- **Git executable not found:** install Git and restart Unity Hub and the Editor.
-- **Repository not found:** verify the URL and network access.
-- **Package resolution failed:** remove a stale package lock entry only after closing Unity, then reopen the project.
-- **Unsupported Editor:** use Unity `2021.3` or later.
-
-See [troubleshooting](troubleshooting.md) for import-specific help.
+If Unity cannot install the package, check that Git is available, the URL is correct, and the Editor is new enough. Closing and reopening Unity often clears a stale package-resolution error.
