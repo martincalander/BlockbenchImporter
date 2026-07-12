@@ -178,7 +178,8 @@ namespace Essentials.BlockbenchImporter.Builders
                 // Build rotation curves (using quaternions)
                 if (rotationKeyframes.Count > 0)
                 {
-                    BuildRotationCurves(clip, transformPath, rotationKeyframes, restRotation);
+                    BuildRotationCurves(clip, transformPath, nodeUuid, rotationKeyframes, restRotation,
+                        animator, anim);
                     hasAnyCurves = true;
                 }
 
@@ -213,7 +214,7 @@ namespace Essentials.BlockbenchImporter.Builders
 
                 // Animation position offsets are in Blockbench units
                 // They get scaled by the root transform, so keep them in BB units
-                Vector3 unityPos = bbPos;
+                Vector3 unityPos = CoordinateConverter.ConvertPositionRaw(bbPos.x, bbPos.y, bbPos.z);
 
                 // Add to rest position
                 Vector3 finalPos = restPosition + unityPos;
@@ -232,67 +233,151 @@ namespace Essentials.BlockbenchImporter.Builders
                 curveZ.AddKey(kfZ);
             }
 
+            ApplyCurveInterpolation(curveX, keyframes, 0);
+            ApplyCurveInterpolation(curveY, keyframes, 1);
+            ApplyCurveInterpolation(curveZ, keyframes, 2);
             clip.SetCurve(path, typeof(Transform), "localPosition.x", curveX);
             clip.SetCurve(path, typeof(Transform), "localPosition.y", curveY);
             clip.SetCurve(path, typeof(Transform), "localPosition.z", curveZ);
         }
 
-        private void BuildRotationCurves(AnimationClip clip, string path, List<BbKeyframe> keyframes,
-            Quaternion restRotation)
+        private void BuildRotationCurves(AnimationClip clip, string path, string nodeUuid,
+            List<BbKeyframe> keyframes, Quaternion restRotation, BbAnimator animator, BbAnimation animation)
         {
-            // Use quaternion curves for smooth interpolation without gimbal lock
             var curveX = new AnimationCurve();
             var curveY = new AnimationCurve();
             var curveZ = new AnimationCurve();
             var curveW = new AnimationCurve();
-
-            // Sort keyframes by time
             keyframes.Sort((a, b) => a.time.CompareTo(b.time));
-
             Quaternion prevQuat = restRotation;
+            float duration = Mathf.Max(animation.length, keyframes[keyframes.Count - 1].time);
+            int sampleRate = Mathf.Max(60, Mathf.Max(1, animation.snapping) * 4);
+            var sampleTimes = new SortedSet<float> { 0f, duration };
+            foreach (BbKeyframe keyframe in keyframes) sampleTimes.Add(keyframe.time);
+            for (int frame = 1; frame < Mathf.CeilToInt(duration * sampleRate); frame++)
+                sampleTimes.Add(frame / (float)sampleRate);
 
-            foreach (var kf in keyframes)
+            foreach (float time in sampleTimes)
             {
-                if (kf.data_points == null || kf.data_points.Count == 0)
-                    continue;
-
-                var dp = kf.data_points[0];
-                Vector3 bbEuler = dp.ToVector3();
-
-                // Convert rotation from Blockbench to Unity quaternion
-                Quaternion animQuat = CoordinateConverter.ConvertAnimationRotation(bbEuler);
-
-                // Combine with rest rotation (animation is additive in Blockbench)
-                Quaternion finalQuat = restRotation * animQuat;
-
-                // Ensure shortest path interpolation
+                Quaternion finalQuat = EvaluateRotation(keyframes, time, restRotation,
+                    animator.quaternion_interpolation);
+                if (animator.rotation_global && uuidToTransform.TryGetValue(nodeUuid, out Transform target) &&
+                    target.parent != null)
+                    finalQuat = Quaternion.Inverse(target.parent.rotation) * finalQuat;
                 if (Quaternion.Dot(prevQuat, finalQuat) < 0)
-                {
                     finalQuat = new Quaternion(-finalQuat.x, -finalQuat.y, -finalQuat.z, -finalQuat.w);
-                }
-
                 prevQuat = finalQuat;
-
-                var kfX = new Keyframe(kf.time, finalQuat.x);
-                var kfY = new Keyframe(kf.time, finalQuat.y);
-                var kfZ = new Keyframe(kf.time, finalQuat.z);
-                var kfW = new Keyframe(kf.time, finalQuat.w);
-
-                ApplyInterpolation(ref kfX, kf.interpolation);
-                ApplyInterpolation(ref kfY, kf.interpolation);
-                ApplyInterpolation(ref kfZ, kf.interpolation);
-                ApplyInterpolation(ref kfW, kf.interpolation);
-
-                curveX.AddKey(kfX);
-                curveY.AddKey(kfY);
-                curveZ.AddKey(kfZ);
-                curveW.AddKey(kfW);
+                curveX.AddKey(time, finalQuat.x);
+                curveY.AddKey(time, finalQuat.y);
+                curveZ.AddKey(time, finalQuat.z);
+                curveW.AddKey(time, finalQuat.w);
             }
-
+            SetAllLinear(curveX);
+            SetAllLinear(curveY);
+            SetAllLinear(curveZ);
+            SetAllLinear(curveW);
             clip.SetCurve(path, typeof(Transform), "localRotation.x", curveX);
             clip.SetCurve(path, typeof(Transform), "localRotation.y", curveY);
             clip.SetCurve(path, typeof(Transform), "localRotation.z", curveZ);
             clip.SetCurve(path, typeof(Transform), "localRotation.w", curveW);
+            clip.EnsureQuaternionContinuity();
+        }
+
+        private static Quaternion EvaluateRotation(List<BbKeyframe> keyframes, float time,
+            Quaternion restRotation, bool quaternionInterpolation)
+        {
+            FindKeyframes(keyframes, time, out int before, out int after);
+            if (quaternionInterpolation && before >= 0 && after >= 0 && before != after)
+            {
+                Quaternion left = restRotation * CoordinateConverter.ConvertAnimationRotation(
+                    GetPoint(keyframes[before], true));
+                Quaternion right = restRotation * CoordinateConverter.ConvertAnimationRotation(
+                    GetPoint(keyframes[after], false));
+                float alpha = Mathf.InverseLerp(keyframes[before].time, keyframes[after].time, time);
+                return Quaternion.SlerpUnclamped(left, right, alpha);
+            }
+            return restRotation * CoordinateConverter.ConvertAnimationRotation(new Vector3(
+                EvaluateAxis(keyframes, time, 0, before, after),
+                EvaluateAxis(keyframes, time, 1, before, after),
+                EvaluateAxis(keyframes, time, 2, before, after)));
+        }
+
+        private static void FindKeyframes(List<BbKeyframe> keyframes, float time, out int before, out int after)
+        {
+            before = -1;
+            after = -1;
+            for (int index = 0; index < keyframes.Count; index++)
+            {
+                if (keyframes[index].time <= time) before = index;
+                if (keyframes[index].time >= time) { after = index; break; }
+            }
+            if (before < 0) before = after;
+            if (after < 0) after = before;
+        }
+
+        private static float EvaluateAxis(List<BbKeyframe> keys, float time, int axis, int before, int after)
+        {
+            if (before < 0) return 0f;
+            float left = GetAxis(GetPoint(keys[before], true), axis);
+            if (after < 0 || before == after) return left;
+            float right = GetAxis(GetPoint(keys[after], false), axis);
+            if (keys[before].interpolation == "step") return left;
+            float alpha = Mathf.InverseLerp(keys[before].time, keys[after].time, time);
+            if (keys[before].interpolation == "bezier" || keys[after].interpolation == "bezier")
+                return EvaluateBezier(keys[before], keys[after], axis, alpha, left, right);
+            if (keys[before].interpolation == "catmullrom" || keys[after].interpolation == "catmullrom")
+            {
+                float p0 = before > 0 ? GetAxis(GetPoint(keys[before - 1], true), axis) : left;
+                float p3 = after + 1 < keys.Count ? GetAxis(GetPoint(keys[after + 1], false), axis) : right;
+                float a2 = alpha * alpha;
+                float a3 = a2 * alpha;
+                return 0.5f * ((2f * left) + (-p0 + right) * alpha +
+                               (2f * p0 - 5f * left + 4f * right - p3) * a2 +
+                               (-p0 + 3f * left - 3f * right + p3) * a3);
+            }
+            return Mathf.LerpUnclamped(left, right, alpha);
+        }
+
+        private static float EvaluateBezier(BbKeyframe before, BbKeyframe after, int axis, float alpha,
+            float left, float right)
+        {
+            float gap = Mathf.Max(0.000001f, after.time - before.time);
+            float x1 = Mathf.Clamp01(ReadAxis(before.bezier_right_time, axis) / gap);
+            float x2 = Mathf.Clamp01(1f + ReadAxis(after.bezier_left_time, axis) / gap);
+            float y1 = left + ReadAxis(before.bezier_right_value, axis);
+            float y2 = right + ReadAxis(after.bezier_left_value, axis);
+            float low = 0f, high = 1f, parameter = alpha;
+            for (int iteration = 0; iteration < 14; iteration++)
+            {
+                parameter = (low + high) * 0.5f;
+                float x = Cubic(0f, x1, x2, 1f, parameter);
+                if (x < alpha) low = parameter; else high = parameter;
+            }
+            return Cubic(left, y1, y2, right, parameter);
+        }
+
+        private static float Cubic(float p0, float p1, float p2, float p3, float t)
+        {
+            float inverse = 1f - t;
+            return inverse * inverse * inverse * p0 + 3f * inverse * inverse * t * p1 +
+                   3f * inverse * t * t * p2 + t * t * t * p3;
+        }
+
+        private static Vector3 GetPoint(BbKeyframe keyframe, bool last)
+        {
+            if (keyframe.data_points == null || keyframe.data_points.Count == 0) return Vector3.zero;
+            return keyframe.data_points[last ? keyframe.data_points.Count - 1 : 0].ToVector3();
+        }
+
+        private static float GetAxis(Vector3 value, int axis) => axis == 0 ? value.x : axis == 1 ? value.y : value.z;
+
+        private static void SetAllLinear(AnimationCurve curve)
+        {
+            for (int index = 0; index < curve.length; index++)
+            {
+                AnimationUtility.SetKeyLeftTangentMode(curve, index, AnimationUtility.TangentMode.Linear);
+                AnimationUtility.SetKeyRightTangentMode(curve, index, AnimationUtility.TangentMode.Linear);
+            }
         }
 
         private void BuildScaleCurves(AnimationClip clip, string path, List<BbKeyframe> keyframes, Vector3 restScale)
@@ -312,12 +397,10 @@ namespace Essentials.BlockbenchImporter.Builders
                 var dp = kf.data_points[0];
                 Vector3 bbScale = dp.ToVector3();
 
-                // Scale is typically multiplicative in Blockbench
-                // If values are 0, treat as 1 (no scale change)
                 Vector3 scaleMultiplier = new Vector3(
-                    bbScale.x != 0 ? bbScale.x : 1,
-                    bbScale.y != 0 ? bbScale.y : 1,
-                    bbScale.z != 0 ? bbScale.z : 1
+                    Mathf.Approximately(bbScale.x, 0f) ? 0.00001f : bbScale.x,
+                    Mathf.Approximately(bbScale.y, 0f) ? 0.00001f : bbScale.y,
+                    Mathf.Approximately(bbScale.z, 0f) ? 0.00001f : bbScale.z
                 );
 
                 Vector3 finalScale = Vector3.Scale(restScale, scaleMultiplier);
@@ -335,6 +418,9 @@ namespace Essentials.BlockbenchImporter.Builders
                 curveZ.AddKey(kfZ);
             }
 
+            ApplyCurveInterpolation(curveX, keyframes, 0);
+            ApplyCurveInterpolation(curveY, keyframes, 1);
+            ApplyCurveInterpolation(curveZ, keyframes, 2);
             clip.SetCurve(path, typeof(Transform), "localScale.x", curveX);
             clip.SetCurve(path, typeof(Transform), "localScale.y", curveY);
             clip.SetCurve(path, typeof(Transform), "localScale.z", curveZ);
@@ -345,7 +431,6 @@ namespace Essentials.BlockbenchImporter.Builders
             switch (interpolation?.ToLowerInvariant())
             {
                 case "step":
-                case "catmullrom": // Approximate as step for now
                     kf.inTangent = float.PositiveInfinity;
                     kf.outTangent = float.PositiveInfinity;
                     break;
@@ -355,6 +440,50 @@ namespace Essentials.BlockbenchImporter.Builders
                     break;
             }
         }
+
+        private static void ApplyCurveInterpolation(AnimationCurve curve, List<BbKeyframe> source, int axis)
+        {
+            int count = Mathf.Min(curve.length, source.Count);
+            for (int i = 0; i < count; i++)
+            {
+                string mode = source[i].interpolation ?? "linear";
+                switch (mode)
+                {
+                    case "step":
+                        AnimationUtility.SetKeyLeftTangentMode(curve, i, AnimationUtility.TangentMode.Constant);
+                        AnimationUtility.SetKeyRightTangentMode(curve, i, AnimationUtility.TangentMode.Constant);
+                        break;
+                    case "catmullrom":
+                        AnimationUtility.SetKeyLeftTangentMode(curve, i, AnimationUtility.TangentMode.ClampedAuto);
+                        AnimationUtility.SetKeyRightTangentMode(curve, i, AnimationUtility.TangentMode.ClampedAuto);
+                        break;
+                    case "bezier":
+                    {
+                        Keyframe key = curve.keys[i];
+                        float leftTime = ReadAxis(source[i].bezier_left_time, axis);
+                        float rightTime = ReadAxis(source[i].bezier_right_time, axis);
+                        key.inTangent = Mathf.Abs(leftTime) < 0.000001f ? 0f : ReadAxis(source[i].bezier_left_value, axis) / leftTime;
+                        key.outTangent = Mathf.Abs(rightTime) < 0.000001f ? 0f : ReadAxis(source[i].bezier_right_value, axis) / rightTime;
+                        float previousGap = i > 0 ? Mathf.Max(0.000001f, source[i].time - source[i - 1].time) : 1f;
+                        float nextGap = i + 1 < source.Count ? Mathf.Max(0.000001f, source[i + 1].time - source[i].time) : 1f;
+                        key.inWeight = Mathf.Clamp01(-leftTime / previousGap);
+                        key.outWeight = Mathf.Clamp01(rightTime / nextGap);
+                        key.weightedMode = WeightedMode.Both;
+                        curve.MoveKey(i, key);
+                        AnimationUtility.SetKeyLeftTangentMode(curve, i, AnimationUtility.TangentMode.Free);
+                        AnimationUtility.SetKeyRightTangentMode(curve, i, AnimationUtility.TangentMode.Free);
+                        break;
+                    }
+                    default:
+                        AnimationUtility.SetKeyLeftTangentMode(curve, i, AnimationUtility.TangentMode.Linear);
+                        AnimationUtility.SetKeyRightTangentMode(curve, i, AnimationUtility.TangentMode.Linear);
+                        break;
+                }
+            }
+        }
+
+        private static float ReadAxis(float[] values, int axis) =>
+            values != null && axis >= 0 && axis < values.Length ? values[axis] : 0f;
 
         private string SanitizeName(string name)
         {

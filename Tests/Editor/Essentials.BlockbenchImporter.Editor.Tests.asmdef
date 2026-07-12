@@ -1,0 +1,13 @@
+{
+  "name": "Essentials.BlockbenchImporter.Editor.Tests",
+  "rootNamespace": "Essentials.BlockbenchImporter.Tests",
+  "references": [
+    "Essentials.BlockbenchImporter"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

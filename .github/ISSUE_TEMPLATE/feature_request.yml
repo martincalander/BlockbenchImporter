@@ -1,0 +1,45 @@
+name: Feature request
+description: Propose a focused importer or documentation improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched issues and the roadmap for an existing proposal.
+          required: true
+        - label: This request concerns the importer rather than general Unity or Blockbench support.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow or fidelity gap does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: source-semantics
+    attributes:
+      label: Blockbench source semantics
+      description: Link primary format evidence or describe how Blockbench stores and evaluates the data.
+    validations:
+      required: true
+  - type: textarea
+    id: unity-mapping
+    attributes:
+      label: Proposed Unity representation
+      description: Explain hierarchy, geometry, materials, animation, runtime needs, and compatibility concerns.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: fixtures
+    attributes:
+      label: Example files or references
+      description: Share only content you have permission to redistribute.

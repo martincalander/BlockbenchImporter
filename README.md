@@ -1,119 +1,114 @@
-# Blockbench Importer for Unity
+<div align="center">
+  <img src="Documentation~/Images/hero.svg" alt="Unity Blockbench Importer — drop a Blockbench model into Unity and get a production-ready asset" width="100%">
+</div>
 
-Import Blockbench `.bbmodel` files directly into Unity with full support for hierarchy, textures, and animations.
+<div align="center">
 
-## Features
+[![Validation](https://github.com/martincalander/UnityBlockbenchImporter/actions/workflows/validate.yml/badge.svg)](https://github.com/martincalander/UnityBlockbenchImporter/actions/workflows/validate.yml)
+[![CodeQL](https://github.com/martincalander/UnityBlockbenchImporter/actions/workflows/codeql.yml/badge.svg)](https://github.com/martincalander/UnityBlockbenchImporter/actions/workflows/codeql.yml)
+[![Latest release](https://img.shields.io/github/v/release/martincalander/UnityBlockbenchImporter?display_name=tag&sort=semver)](https://github.com/martincalander/UnityBlockbenchImporter/releases/latest)
+[![Unity 2021.3+](https://img.shields.io/badge/Unity-2021.3%2B-111827?logo=unity)](https://unity.com/releases/editor/whats-new/2021.3.0)
+[![UPM package](https://img.shields.io/badge/UPM-com.essentials.blockbenchimporter-2563eb)](package.json)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-0f766e.svg)](LICENSE.md)
 
-- **Direct Import**: Drop `.bbmodel` files into your Unity project
-- **Full Hierarchy**: Groups and elements maintain correct pivot points and parent-child relationships
-- **Cube & Mesh Elements**: Support for both cube primitives and arbitrary mesh geometry
-- **Multiple Textures**: Per-face texture assignment with automatic submesh/material generation
-- **Embedded Textures**: Base64-encoded textures are automatically extracted
-- **Animation Support**: Blockbench animations converted to Unity AnimationClips with Mecanim support
-- **Render Pipeline Agnostic**: Automatically detects and configures materials for Built-in, URP, or HDRP
+**Drag in a `.bbmodel`. Get a native Unity asset.**
+
+[Install](#installation) · [Import guide](Documentation~/importing-models.md) · [Format support](Documentation~/format-support.md) · [Contribute](CONTRIBUTING.md) · [Report a bug](https://github.com/martincalander/UnityBlockbenchImporter/issues/new/choose)
+
+</div>
+
+Unity Blockbench Importer is a Scripted Importer for Blockbench project files. Put a `.bbmodel` anywhere under `Assets/`; Unity imports its hierarchy, geometry, textures, materials, animations, and optional Animator Controller as one self-contained, prefab-like asset.
+
+The translation layer is designed for fidelity: Blockbench's absolute pivots, coordinate system, outliner, face UVs, texture assignments, armatures, and additive animation channels are converted deliberately instead of approximated through an intermediate export format.
+
+## Why this importer
+
+| | Capability | What you get |
+|---|---|---|
+| 📦 | Native drag-and-drop | `.bbmodel` files behave like first-class Unity assets and reimport when edited. |
+| 🎯 | Transform fidelity | Shared-space pivots, nested groups, handedness conversion, element origins, and rotations are preserved. |
+| 🧊 | Production geometry | Cubes, polygon meshes, weighted armatures, billboards, locators, nulls, and bounding boxes are translated. |
+| 🎨 | Texture-aware materials | Embedded and external textures, per-face assignments, UV rotation, alpha cutout, and double-sided modes are supported. |
+| 🎬 | Animation-ready | Clips and an optional Animator Controller are generated directly from Blockbench animation channels. |
+| 🔒 | Non-destructive | Source files are never rewritten, scripts are never evaluated, and generated data stays inside the imported asset. |
+
+<div align="center">
+  <img src="Documentation~/Images/import-pipeline.svg" alt="Blockbench project to Unity asset import pipeline" width="880">
+</div>
 
 ## Installation
 
-### Via Package Manager (Git URL)
+### Unity Package Manager
 
-1. Open Unity Package Manager (Window > Package Manager)
-2. Click the `+` button and select "Add package from git URL..."
-3. Enter the repository URL
+1. Open **Window → Package Manager**.
+2. Select **+ → Add package from git URL…**.
+3. Enter:
 
-### Via Local Folder
+   ```text
+   https://github.com/martincalander/UnityBlockbenchImporter.git
+   ```
 
-1. Clone or download this repository
-2. Copy to your project's `Packages/` folder
+To pin a release, append a tag such as `#v1.0.0`. You can also add the dependency directly to `Packages/manifest.json`:
 
-## Usage
+```json
+{
+  "dependencies": {
+    "com.essentials.blockbenchimporter": "https://github.com/martincalander/UnityBlockbenchImporter.git#v1.0.0"
+  }
+}
+```
 
-1. Export your model from Blockbench as `.bbmodel` (File > Save Project As...)
-2. Drag the `.bbmodel` file into your Unity project
-3. The model will be automatically imported as a prefab
+The package supports Unity `2021.3` or newer. Install from a tagged release for reproducible projects; use `main` only when evaluating unreleased changes.
 
-### Import Settings
+## Three-step workflow
 
-Select the `.bbmodel` file in the Project window to access import settings:
+1. Save your Blockbench project as `.bbmodel` and keep any non-embedded textures beside it.
+2. Drag the file into the Unity Project window.
+3. Select the imported asset to configure scale, visibility, materials, textures, animations, and collider behavior; press **Apply** to reimport.
 
-| Setting | Description |
-|---------|-------------|
-| **Scale** | Global scale multiplier |
-| **Units Mode** | How to interpret Blockbench units |
-| **Import Textures** | Import embedded textures |
-| **Pixel Art Mode** | Use point filtering (recommended for voxel art) |
-| **Force Alpha Clip** | Enable cutout mode to prevent see-through artifacts |
-| **Alpha Cutoff** | Threshold for alpha clipping (0.0 - 1.0) |
-| **Import Animations** | Import Blockbench animations |
-| **Create Animator Controller** | Generate a Mecanim AnimatorController |
+The main asset can be dragged directly into a scene. Meshes, textures, materials, clips, and the optional controller remain embedded sub-assets, so the Project window stays tidy.
 
-## Coordinate System
+## Import settings
 
-Blockbench and Unity use compatible Y-up coordinate systems:
-- **Blockbench**: X = right, Y = up, Z = depth (front face "north" looks toward -Z)
-- **Unity**: X = right, Y = up, Z = forward
+- **Units Per Pixel** defaults to `0.0625`, matching Blockbench's default 16-pixels-per-unit glTF scale.
+- **Include Hidden / Non-Exported Elements** controls whether authoring-only content is generated.
+- **Material Mode** defaults to Unlit for viewport-like color; Lit integrates with scene lighting.
+- **Texture Filter / Wrap** defaults to Point and Clamp for pixel-art fidelity.
+- **Alpha Mode** detects transparency or forces opaque/cutout rendering.
+- **Import Animations** creates clips; **Create Animator Controller** adds an Animator and one state per clip.
 
-The importer matches Blockbench's glTF export behavior:
-- Positions: Scaled by 1/16 (16 Blockbench pixels = 1 Unity unit)
-- Rotations: Applied directly (same Euler angle convention)
-- Scale: Applied to root transform (0.0625 = 1/16)
-- Front face ("north"): Faces -Z direction in Unity
+See the [import guide](Documentation~/importing-models.md) for the complete workflow and [format support matrix](Documentation~/format-support.md) for exact behavior and known boundaries.
 
-## Supported Features
+## Compatibility and trust
 
-### Elements
-- ✅ Cube elements with from/to bounds
-- ✅ Cube rotation and origin/pivot
-- ✅ Cube inflate property
-- ✅ Mesh elements with arbitrary vertices/faces
-- ✅ Per-face textures and UVs
-- ✅ UV rotation (0°, 90°, 180°, 270°)
+- The package is editor-only except for the small runtime billboard component required by imported camera-facing geometry.
+- Imported JSON is treated as data. Plugin-defined Molang expressions are not executed.
+- Unknown element types are preserved as transforms and surfaced as warnings rather than silently dropped.
+- Pull requests receive package-structure, metadata, documentation, dependency, and CodeQL checks.
+- Releases are built from version tags and include a SHA-256 checksum.
 
-### Textures
-- ✅ Embedded base64 PNG textures
-- ✅ External texture file references
-- ✅ Multiple textures per model
-- ✅ Per-face texture assignment
-- ✅ Point/Bilinear filtering options
+No importer can promise visual identity for every custom Blockbench plugin or shader pipeline. Unsupported data is documented in the [format support matrix](Documentation~/format-support.md), and fidelity bugs are treated as defects.
 
-### Hierarchy
-- ✅ Groups as GameObjects
-- ✅ Nested groups
-- ✅ Element parenting
-- ✅ Pivot/origin handling
-- ✅ Group rotation
+## Documentation
 
-### Animations
-- ✅ Position keyframes
-- ✅ Rotation keyframes (quaternion interpolation)
-- ✅ Scale keyframes
-- ✅ Linear interpolation
-- ✅ Step interpolation
-- ✅ Loop modes (once, loop, hold)
-- ✅ AnimatorController generation
+- [UPM manual](Documentation~/index.md)
+- [Installation and upgrades](Documentation~/installation.md)
+- [Importing models](Documentation~/importing-models.md)
+- [Format support](Documentation~/format-support.md)
+- [Troubleshooting](Documentation~/troubleshooting.md)
+- [Architecture and safety model](Documentation~/architecture.md)
+- [Contributing](CONTRIBUTING.md), [support](SUPPORT.md), and [security policy](SECURITY.md)
 
-## Troubleshooting
+## Contributing
 
-### Model appears inside-out
-- Ensure winding order is correct in the mesh builder
-- Check that normals are pointing outward
+Issues and focused pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before changing the translation layer; every fidelity fix should include the smallest legal `.bbmodel` fixture or a programmatic regression test that demonstrates the expected Blockbench-to-Unity mapping.
 
-### See-through/transparency artifacts
-- Enable "Force Alpha Clip" in import settings
-- Increase the Alpha Cutoff value
+## License and attribution
 
-### Animations don't play
-- Ensure "Import Animations" is enabled
-- Check that "Create Animator Controller" is enabled
-- Verify the Animator component is on the root object
+Licensed under the [Apache License 2.0](LICENSE.md). Copyright © 2026 Martin Calander. Derivative distributions must retain applicable attribution notices from [NOTICE.md](NOTICE.md) as described by Section 4(d) of the license.
 
-### Textures appear wrong
-- Check that textures are embedded in the .bbmodel file
-- Verify UV coordinates in Blockbench
+Unity is a trademark of Unity Technologies. Blockbench is a trademark of its respective owner. This independent project is not affiliated with, endorsed by, or sponsored by Unity Technologies or Blockbench.
 
-## License
-
-MIT License - See LICENSE file for details.
-
-## Credits
-
-Developed by Essentials
+<div align="center">
+  <sub>Designed and maintained by <a href="https://martincalander.com">Martin Calander</a>.</sub>
+</div>

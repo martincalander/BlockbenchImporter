@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use Unity Blockbench Importer in research or tooling work, please cite it as software."
+title: "Unity Blockbench Importer"
+type: software
+authors:
+  - family-names: "Calander"
+    given-names: "Martin"
+url: "https://github.com/martincalander/UnityBlockbenchImporter"
+repository-code: "https://github.com/martincalander/UnityBlockbenchImporter"
+license: "Apache-2.0"
+version: "1.0.0"
+date-released: 2026-07-12

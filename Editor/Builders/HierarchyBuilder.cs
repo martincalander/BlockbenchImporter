@@ -1,5 +1,6 @@
+using System;
 using System.Collections.Generic;
-using Essentials.BlockbenchImporter.Builders;
+using System.Linq;
 using Essentials.BlockbenchImporter.MeshBuilders;
 using Essentials.BlockbenchImporter.Model;
 using Essentials.BlockbenchImporter.Parsing;
@@ -8,240 +9,279 @@ using UnityEngine;
 
 namespace Essentials.BlockbenchImporter.Builders
 {
-    /// <summary>
-    /// Builds the Unity GameObject hierarchy from a parsed Blockbench model.
-    /// </summary>
-    public class HierarchyBuilder
+    internal sealed class HierarchyBuilder
     {
         private readonly BbModel model;
         private readonly BlockbenchImporterSettings settings;
-        private readonly MaterialBuilder materialBuilder;
-
-        // Tracking for animation binding
+        private readonly MaterialBuilder materials;
         private readonly Dictionary<string, string> uuidToPath = new Dictionary<string, string>();
         private readonly Dictionary<string, Transform> uuidToTransform = new Dictionary<string, Transform>();
-        private readonly Dictionary<string, int> nameCounter = new Dictionary<string, int>();
-        private readonly List<Mesh> builtMeshes = new List<Mesh>();
+        private readonly List<Mesh> meshes = new List<Mesh>();
+        private readonly List<string> warnings = new List<string>();
+        private readonly Dictionary<string, BuiltElement> builtElements = new Dictionary<string, BuiltElement>();
 
         public Dictionary<string, string> UuidToPath => uuidToPath;
         public Dictionary<string, Transform> UuidToTransform => uuidToTransform;
-        public List<Mesh> BuiltMeshes => builtMeshes;
+        public List<Mesh> BuiltMeshes => meshes;
+        public List<string> Warnings => warnings;
 
-        public HierarchyBuilder(BbModel model, BlockbenchImporterSettings settings, MaterialBuilder materialBuilder)
+        public HierarchyBuilder(BbModel model, BlockbenchImporterSettings settings, MaterialBuilder materials)
         {
             this.model = model;
             this.settings = settings;
-            this.materialBuilder = materialBuilder;
+            this.materials = materials;
         }
 
-        /// <summary>
-        /// Build the complete hierarchy from the model.
-        /// </summary>
         public GameObject BuildHierarchy()
         {
-            // Parse outliner into tree structure
-            var outlinerTree = BbModelParser.BuildHierarchy(model);
-
-            // Create root GameObject
-            string rootName = !string.IsNullOrEmpty(model.name) ? model.name : "BlockbenchModel";
-            var root = new GameObject(SanitizeName(rootName));
-
-            // Build children from outliner
-            foreach (var node in outlinerTree)
-            {
-                BuildNode(node, root.transform, "");
-            }
-
-            // Apply global scale: converts Blockbench pixels to Unity units
-            // Default: 16 pixels = 1 Unity unit (matching Blockbench glTF export)
-            // Additional user scale multiplier can adjust this
-            float scale = CoordinateConverter.PixelsToUnits * settings.scale;
-            root.transform.localScale = Vector3.one * scale;
-
+            var root = new GameObject(BlockbenchImporter.Sanitize(model.name ?? "Blockbench Model"));
+            root.transform.localScale = Vector3.one * settings.unitsPerPixel;
+            BuildChildren(BbModelParser.BuildHierarchy(model), root.transform, string.Empty, Vector3.zero);
+            BuildArmatures();
             return root;
         }
 
-        private void BuildNode(OutlinerNode node, Transform parent, string parentPath)
+        private void BuildChildren(IReadOnlyList<OutlinerNode> nodes, Transform parent, string parentPath,
+            Vector3 parentOrigin)
         {
-            if (node.isGroup)
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (OutlinerNode node in nodes)
             {
-                BuildGroupNode(node, parent, parentPath);
-            }
-            else
-            {
-                BuildElementNode(node, parent, parentPath);
+                if (node.isGroup)
+                    BuildGroup(node, parent, parentPath, parentOrigin, names);
+                else
+                    BuildElement(node, parent, parentPath, parentOrigin, names);
             }
         }
 
-        private void BuildGroupNode(OutlinerNode node, Transform parent, string parentPath)
+        private void BuildGroup(OutlinerNode node, Transform parent, string parentPath, Vector3 parentOrigin,
+            HashSet<string> siblingNames)
         {
-            var group = node.group;
-            if (group == null) return;
+            BbGroup group = node.group;
+            if (group == null || (!settings.includeNonExportedElements && !group.export)) return;
+            if (!settings.includeHiddenElements && !group.visibility) return;
 
-            string name = GetUniqueName(group.name ?? "Group", parentPath);
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
+            string name = UniqueName(group.name, siblingNames);
+            var gameObject = new GameObject(name);
+            gameObject.transform.SetParent(parent, false);
+            Vector3 origin = CoordinateConverter.ConvertPositionRaw(group.origin);
+            gameObject.transform.localPosition = origin - parentOrigin;
+            gameObject.transform.localRotation = CoordinateConverter.ConvertRotation(group.rotation);
 
-            // Get parent origin for relative positioning
-            Vector3 parentOrigin = GetParentOrigin(parent);
+            string path = CombinePath(parentPath, name);
+            Register(group.uuid, path, gameObject.transform);
+            BuildChildren(node.children, gameObject.transform, path, origin);
+        }
 
-            // Position is the difference between this origin and parent origin
-            // Keep in Blockbench pixel units - scale is applied at root
-            // Negate X to match glTF export coordinate system
-            Vector3 bbOrigin = new Vector3(-group.origin[0], group.origin[1], group.origin[2]);
-            Vector3 relativeOrigin = bbOrigin - parentOrigin;
-            go.transform.localPosition = relativeOrigin;
+        private void BuildElement(OutlinerNode node, Transform parent, string parentPath, Vector3 parentOrigin,
+            HashSet<string> siblingNames)
+        {
+            BbElement element = node.element;
+            if (element == null || (!settings.includeNonExportedElements && !element.export)) return;
+            if (!settings.includeHiddenElements && !element.visibility) return;
 
-            // Apply rotation if present
-            if (group.rotation != null && group.rotation.Length >= 3)
+            string name = UniqueName(element.name, siblingNames);
+            var gameObject = new GameObject(name);
+            gameObject.transform.SetParent(parent, false);
+
+            float[] sourceOrigin = element.position ?? element.origin;
+            Vector3 origin = CoordinateConverter.ConvertPositionRaw(sourceOrigin);
+            gameObject.transform.localPosition = origin - parentOrigin;
+            gameObject.transform.localRotation = CoordinateConverter.ConvertRotation(element.rotation);
+            if (element.scale != null && element.scale.Length >= 3)
+                gameObject.transform.localScale = new Vector3(element.scale[0], element.scale[1], element.scale[2]);
+
+            string path = CombinePath(parentPath, name);
+            Register(element.uuid, path, gameObject.transform);
+
+            CubeMeshResult result = null;
+            switch (element.type)
             {
-                go.transform.localRotation = CoordinateConverter.ConvertRotation(group.rotation);
+                case "cube":
+                    result = CubeMeshBuilder.BuildCubeMesh(element, model.resolution, model.textures.Count,
+                        settings.generateBackfacesForDoubleSidedTextures, materials.IsDoubleSidedTexture,
+                        model.textures);
+                    break;
+                case "mesh":
+                    result = MeshElementBuilder.BuildMeshElement(element, model.resolution, model.textures.Count,
+                        model.textures);
+                    break;
+                case "billboard":
+                    result = BillboardMeshBuilder.Build(element, model.resolution, model.textures);
+                    gameObject.AddComponent<BlockbenchBillboard>().Mode = ConvertFacingMode(element.facing_mode);
+                    break;
+                case "locator":
+                case "null_object":
+                case "armature":
+                case "armature_bone":
+                    break;
+                case "bounding_box":
+                    if (settings.importBoundingBoxesAsColliders)
+                    {
+                        var collider = gameObject.AddComponent<BoxCollider>();
+                        collider.center = CoordinateConverter.ConvertPositionRaw(
+                            (element.from[0] + element.to[0]) * 0.5f,
+                            (element.from[1] + element.to[1]) * 0.5f,
+                            (element.from[2] + element.to[2]) * 0.5f);
+                        collider.size = new Vector3(Mathf.Abs(element.to[0] - element.from[0]),
+                            Mathf.Abs(element.to[1] - element.from[1]),
+                            Mathf.Abs(element.to[2] - element.from[2]));
+                    }
+                    break;
+                case "texture_mesh":
+                    warnings.Add("Texture mesh '" + name + "' was imported as a transform only; Blockbench texture meshes are editor visualization geometry, not a conventional model mesh.");
+                    break;
+                default:
+                    warnings.Add("Unknown Blockbench element type '" + element.type + "' on '" + name + "' was preserved as a transform.");
+                    break;
             }
 
-            // Store UUID to path mapping for animations
-            string path = string.IsNullOrEmpty(parentPath) ? name : $"{parentPath}/{name}";
-            uuidToPath[group.uuid] = path;
-            uuidToTransform[group.uuid] = go.transform;
-
-            // Store origin for child elements
-            var originMarker = go.AddComponent<BlockbenchOriginMarker>();
-            originMarker.blockbenchOrigin = bbOrigin;
-            originMarker.uuid = group.uuid;
-
-            // Build children
-            foreach (var child in node.children)
+            if (result != null && result.mesh != null)
             {
-                BuildNode(child, go.transform, path);
+                result.mesh.name = name;
+                meshes.Add(result.mesh);
+                gameObject.AddComponent<MeshFilter>().sharedMesh = result.mesh;
+                gameObject.AddComponent<MeshRenderer>().sharedMaterials = materials.GetMaterialsForSubmeshes(result.textureIndices);
+            }
+            if (!string.IsNullOrEmpty(element.uuid))
+                builtElements[element.uuid] = new BuiltElement(element, gameObject, result);
+            if (node.children.Count != 0)
+                BuildChildren(node.children, gameObject.transform, path, origin);
+        }
+
+        private void BuildArmatures()
+        {
+            foreach (BbElement armature in model.elements)
+            {
+                if (armature.type != "armature" || !builtElements.TryGetValue(armature.uuid, out BuiltElement builtArmature))
+                    continue;
+                var boneElements = new List<BbElement>();
+                CollectChildrenOfType(armature, "armature_bone", boneElements, true);
+                var meshElements = new List<BbElement>();
+                CollectChildrenOfType(armature, "mesh", meshElements, false);
+                if (boneElements.Count == 0) continue;
+
+                foreach (BbElement meshElement in meshElements)
+                {
+                    if (!builtElements.TryGetValue(meshElement.uuid, out BuiltElement builtMesh) ||
+                        builtMesh.result == null || builtMesh.result.mesh == null ||
+                        builtMesh.result.sourceVertexIds.Length != builtMesh.result.mesh.vertexCount)
+                        continue;
+
+                    List<BbElement> activeBones = boneElements
+                        .Where(bone => builtElements.ContainsKey(bone.uuid)).ToList();
+                    Transform[] bones = activeBones
+                        .Select(bone => builtElements[bone.uuid].gameObject.transform)
+                        .Concat(new[] { builtMesh.gameObject.transform })
+                        .ToArray();
+                    if (bones.Length <= 1) continue;
+
+                    var bindPoses = new Matrix4x4[bones.Length];
+                    for (int index = 0; index < bones.Length; index++)
+                        bindPoses[index] = bones[index].worldToLocalMatrix * builtMesh.gameObject.transform.localToWorldMatrix;
+                    builtMesh.result.mesh.bindposes = bindPoses;
+
+                    var boneWeights = new BoneWeight[builtMesh.result.mesh.vertexCount];
+                    string meshPrefix = meshElement.uuid.Length >= 6 ? meshElement.uuid.Substring(0, 6) + ":" : string.Empty;
+                    for (int vertex = 0; vertex < boneWeights.Length; vertex++)
+                    {
+                        string vertexId = builtMesh.result.sourceVertexIds[vertex];
+                        var influences = new List<KeyValuePair<int, float>>();
+                        for (int boneIndex = 0; boneIndex < bones.Length - 1; boneIndex++)
+                        {
+                            BbElement bone = activeBones[boneIndex];
+                            if (!bone.vertex_weights.TryGetValue(meshPrefix + vertexId, out float weight) &&
+                                !bone.vertex_weights.TryGetValue(vertexId, out weight)) continue;
+                            if (weight > 0f) influences.Add(new KeyValuePair<int, float>(boneIndex, weight));
+                        }
+                        influences.Sort((left, right) => right.Value.CompareTo(left.Value));
+                        if (influences.Count == 0)
+                            influences.Add(new KeyValuePair<int, float>(bones.Length - 1, 1f));
+                        boneWeights[vertex] = CreateBoneWeight(influences);
+                    }
+                    builtMesh.result.mesh.boneWeights = boneWeights;
+
+                    MeshRenderer oldRenderer = builtMesh.gameObject.GetComponent<MeshRenderer>();
+                    Material[] sharedMaterials = oldRenderer != null ? oldRenderer.sharedMaterials : new Material[0];
+                    MeshFilter oldFilter = builtMesh.gameObject.GetComponent<MeshFilter>();
+                    if (oldRenderer != null) UnityEngine.Object.DestroyImmediate(oldRenderer);
+                    if (oldFilter != null) UnityEngine.Object.DestroyImmediate(oldFilter);
+                    var renderer = builtMesh.gameObject.AddComponent<SkinnedMeshRenderer>();
+                    renderer.sharedMesh = builtMesh.result.mesh;
+                    renderer.sharedMaterials = sharedMaterials;
+                    renderer.bones = bones;
+                    renderer.rootBone = builtArmature.gameObject.transform;
+                    renderer.localBounds = builtMesh.result.mesh.bounds;
+                }
             }
         }
 
-        private void BuildElementNode(OutlinerNode node, Transform parent, string parentPath)
+        private void CollectChildrenOfType(BbElement parent, string type, List<BbElement> result, bool recursive)
         {
-            var element = node.element;
-            if (element == null) return;
-
-            string name = GetUniqueName(element.name ?? "Element", parentPath);
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-
-            // Get parent origin for relative positioning
-            Vector3 parentOrigin = GetParentOrigin(parent);
-
-            // Position is the difference between this origin and parent origin
-            // Keep in Blockbench pixel units - scale is applied at root
-            // Negate X to match glTF export coordinate system
-            Vector3 bbOrigin = new Vector3(-element.origin[0], element.origin[1], element.origin[2]);
-            Vector3 relativeOrigin = bbOrigin - parentOrigin;
-            go.transform.localPosition = relativeOrigin;
-
-            // Apply element rotation if present
-            if (element.rotation != null && element.rotation.Length >= 3)
+            foreach (object childReference in parent.children)
             {
-                go.transform.localRotation = CoordinateConverter.ConvertRotation(element.rotation);
-            }
-
-            // Store UUID to path mapping
-            string path = string.IsNullOrEmpty(parentPath) ? name : $"{parentPath}/{name}";
-            uuidToPath[element.uuid] = path;
-            uuidToTransform[element.uuid] = go.transform;
-
-            // Build mesh based on element type
-            CubeMeshResult meshResult = null;
-
-            if (element.type == "cube")
-            {
-                meshResult = CubeMeshBuilder.BuildCubeMesh(element, model.resolution, model.textures.Count);
-            }
-            else if (element.type == "mesh")
-            {
-                meshResult = MeshElementBuilder.BuildMeshElement(element, model.resolution, model.textures.Count);
-            }
-
-            if (meshResult != null && meshResult.mesh != null)
-            {
-                meshResult.mesh.name = name;
-                builtMeshes.Add(meshResult.mesh);
-
-                // Add mesh components
-                var meshFilter = go.AddComponent<MeshFilter>();
-                meshFilter.sharedMesh = meshResult.mesh;
-
-                var meshRenderer = go.AddComponent<MeshRenderer>();
-                meshRenderer.sharedMaterials = materialBuilder.GetMaterialsForSubmeshes(meshResult.textureIndices);
+                if (!(childReference is string uuid) || !model.elementsByUuid.TryGetValue(uuid, out BbElement child))
+                    continue;
+                if (child.type == type) result.Add(child);
+                if (recursive && child.children != null) CollectChildrenOfType(child, type, result, true);
             }
         }
 
-        private Vector3 GetParentOrigin(Transform parent)
+        private static BoneWeight CreateBoneWeight(List<KeyValuePair<int, float>> influences)
         {
-            var originMarker = parent.GetComponent<BlockbenchOriginMarker>();
-            if (originMarker != null)
-            {
-                return originMarker.blockbenchOrigin;
-            }
-            return Vector3.zero; // Default origin for root
+            int count = Mathf.Min(4, influences.Count);
+            float total = 0f;
+            for (int index = 0; index < count; index++) total += influences[index].Value;
+            if (total <= 0f) total = 1f;
+            var weight = new BoneWeight();
+            if (count > 0) { weight.boneIndex0 = influences[0].Key; weight.weight0 = influences[0].Value / total; }
+            if (count > 1) { weight.boneIndex1 = influences[1].Key; weight.weight1 = influences[1].Value / total; }
+            if (count > 2) { weight.boneIndex2 = influences[2].Key; weight.weight2 = influences[2].Value / total; }
+            if (count > 3) { weight.boneIndex3 = influences[3].Key; weight.weight3 = influences[3].Value / total; }
+            return weight;
         }
 
-        /// <summary>
-        /// Get a unique name for a GameObject, ensuring no duplicate paths exist.
-        /// </summary>
-        private string GetUniqueName(string baseName, string parentPath)
+        private static BlockbenchBillboard.FacingMode ConvertFacingMode(string mode)
         {
-            string sanitized = SanitizeName(baseName);
-            string fullPath = string.IsNullOrEmpty(parentPath) ? sanitized : $"{parentPath}/{sanitized}";
-
-            if (!nameCounter.ContainsKey(fullPath))
+            switch (mode)
             {
-                nameCounter[fullPath] = 1;
-                return sanitized;
+                case "lookat_y": return BlockbenchBillboard.FacingMode.LookAtYAxis;
+                case "rotate": return BlockbenchBillboard.FacingMode.CameraRotation;
+                case "rotate_y": return BlockbenchBillboard.FacingMode.CameraRotationYAxis;
+                default: return BlockbenchBillboard.FacingMode.LookAt;
             }
-
-            // Find a unique name by incrementing counter
-            int count = 2;
-            string uniqueName;
-            string testPath;
-            do
-            {
-                uniqueName = $"{sanitized}_{count}";
-                testPath = string.IsNullOrEmpty(parentPath) ? uniqueName : $"{parentPath}/{uniqueName}";
-                count++;
-            } while (nameCounter.ContainsKey(testPath));
-
-            nameCounter[testPath] = 1;
-            return uniqueName;
         }
 
-        private string SanitizeName(string name)
+        private void Register(string uuid, string path, Transform transform)
         {
-            if (string.IsNullOrEmpty(name))
-                return "Unnamed";
-
-            // Replace invalid characters
-            char[] invalid = System.IO.Path.GetInvalidFileNameChars();
-            foreach (char c in invalid)
-            {
-                name = name.Replace(c, '_');
-            }
-
-            // Remove leading/trailing whitespace
-            name = name.Trim();
-
-            if (string.IsNullOrEmpty(name))
-                return "Unnamed";
-
-            return name;
+            if (string.IsNullOrEmpty(uuid)) return;
+            uuidToPath[uuid] = path;
+            uuidToTransform[uuid] = transform;
         }
-    }
 
-    /// <summary>
-    /// Component to track Blockbench origin for proper child positioning.
-    /// This is stripped in builds if not needed at runtime.
-    /// </summary>
-    public class BlockbenchOriginMarker : MonoBehaviour
-    {
-        [HideInInspector]
-        public Vector3 blockbenchOrigin;
+        private static string CombinePath(string parent, string child) =>
+            string.IsNullOrEmpty(parent) ? child : parent + "/" + child;
 
-        [HideInInspector]
-        public string uuid;
+        private static string UniqueName(string proposed, HashSet<string> used)
+        {
+            string basis = BlockbenchImporter.Sanitize(proposed ?? "Unnamed");
+            string value = basis;
+            for (int suffix = 2; !used.Add(value); suffix++) value = basis + "_" + suffix;
+            return value;
+        }
+
+        private sealed class BuiltElement
+        {
+            public readonly BbElement element;
+            public readonly GameObject gameObject;
+            public readonly CubeMeshResult result;
+
+            public BuiltElement(BbElement element, GameObject gameObject, CubeMeshResult result)
+            {
+                this.element = element;
+                this.gameObject = gameObject;
+                this.result = result;
+            }
+        }
     }
 }

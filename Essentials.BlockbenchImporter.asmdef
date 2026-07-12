@@ -1,7 +1,9 @@
 {
     "name": "Essentials.BlockbenchImporter",
     "rootNamespace": "Essentials.BlockbenchImporter",
-    "references": [],
+    "references": [
+        "Essentials.BlockbenchImporter.Runtime"
+    ],
     "includePlatforms": [
         "Editor"
     ],

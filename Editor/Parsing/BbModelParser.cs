@@ -41,7 +41,7 @@ namespace Essentials.BlockbenchImporter.Parsing
 
             model.name = GetString(root, "name");
             model.model_identifier = GetString(root, "model_identifier");
-            model.visible_box = GetBool(root, "visible_box", true);
+            model.visible_box = GetFloatArray(root, "visible_box", new[] { 1f, 1f, 0f });
             model.resolution = GetResolution(root, new[] { 16, 16 });
 
             // Parse elements
@@ -113,7 +113,59 @@ namespace Essentials.BlockbenchImporter.Parsing
             }
 
             model.BuildLookupTables();
+            Validate(model);
             return model;
+        }
+
+        private static void Validate(BbModel model)
+        {
+            if (model.meta == null)
+                model.warnings.Add("The project has no Blockbench meta object; defaults were used.");
+            else if (!string.IsNullOrEmpty(model.meta.format_version) &&
+                     Version.TryParse(model.meta.format_version, out Version version) && version.Major > 5)
+                model.warnings.Add("This project uses Blockbench format " + model.meta.format_version +
+                                   ", newer than the importer's verified format 5.x. Unknown fields will be preserved only where supported.");
+
+            var uuids = new HashSet<string>();
+            foreach (BbElement element in model.elements)
+                if (!string.IsNullOrEmpty(element.uuid) && !uuids.Add(element.uuid))
+                    model.warnings.Add("Duplicate element UUID '" + element.uuid + "' may make hierarchy and animation bindings ambiguous.");
+            foreach (BbGroup group in model.groups)
+                if (!string.IsNullOrEmpty(group.uuid) && !uuids.Add(group.uuid))
+                    model.warnings.Add("Duplicate group UUID '" + group.uuid + "' may make hierarchy and animation bindings ambiguous.");
+
+            foreach (BbTexture texture in model.textures)
+            {
+                if (!string.IsNullOrEmpty(texture.pbr_channel) && texture.pbr_channel != "color")
+                    model.warnings.Add("Texture '" + texture.name + "' uses PBR channel '" + texture.pbr_channel +
+                                       "'. It is imported separately; automatic PBR texture-group assembly is not available.");
+                if (texture.frame_count > 1)
+                    model.warnings.Add("Animated texture '" + texture.name +
+                                       "' is imported as a complete atlas; runtime frame playback is not generated.");
+            }
+
+            foreach (BbAnimation animation in model.animations)
+            foreach (var pair in animation.animators)
+            {
+                BbAnimator animator = pair.Value;
+                if (animator.type != "bone")
+                    model.warnings.Add("Animation '" + animation.name + "' contains '" + animator.type +
+                                       "' tracks. Only transform tracks produce Unity curves.");
+                if (animator.rotation_global)
+                    model.warnings.Add("Animation '" + animation.name + "' uses global rotation on '" +
+                                       animator.name + "'. The curve is baked relative to the imported parent rest pose.");
+                foreach (BbKeyframe keyframe in animator.keyframes)
+                foreach (BbDataPoint point in keyframe.data_points)
+                    if (!IsNumeric(point.x) || !IsNumeric(point.y) || !IsNumeric(point.z))
+                        model.warnings.Add("Animation '" + animation.name + "' contains a Molang/expression value on '" +
+                                           animator.name + "'. Unity clips require baked numeric values; it resolves to zero.");
+            }
+        }
+
+        private static bool IsNumeric(string value)
+        {
+            return string.IsNullOrEmpty(value) || float.TryParse(value, NumberStyles.Float,
+                CultureInfo.InvariantCulture, out _);
         }
 
         private static BbElement ParseElement(Dictionary<string, object> dict)
@@ -128,16 +180,34 @@ namespace Essentials.BlockbenchImporter.Parsing
                 locked = GetBool(dict, "locked"),
                 render_order = GetBool(dict, "render_order"),
                 allow_mirror_modeling = GetBool(dict, "allow_mirror_modeling"),
+                export = GetBool(dict, "export", true),
+                visibility = GetBool(dict, "visibility", true),
+                shade = GetBool(dict, "shade", true),
                 from = GetFloatArray(dict, "from", new[] { 0f, 0f, 0f }),
                 to = GetFloatArray(dict, "to", new[] { 16f, 16f, 16f }),
                 autouv = GetInt(dict, "autouv"),
-                color = GetFloatArray(dict, "color", null),
+                color = GetInt(dict, "color"),
                 inflate = GetFloat(dict, "inflate"),
-                origin = GetFloatArray(dict, "origin", new[] { 8f, 8f, 8f }),
+                stretch = GetFloatArray(dict, "stretch", new[] { 1f, 1f, 1f }),
+                origin = GetFloatArray(dict, "origin", new[] { 0f, 0f, 0f }),
+                position = GetFloatArray(dict, "position", null),
+                local_pivot = GetFloatArray(dict, "local_pivot", null),
                 rotation = GetFloatArray(dict, "rotation", null),
+                scale = GetFloatArray(dict, "scale", new[] { 1f, 1f, 1f }),
+                size = GetFloatArray(dict, "size", new[] { 2f, 2f }),
+                offset = GetFloatArray(dict, "offset", new[] { 0f, 0f }),
+                facing_mode = GetString(dict, "facing_mode", "lookat"),
                 uv_offset = GetFloatArray(dict, "uv_offset", null),
-                mirror_uv = GetBool(dict, "mirror_uv")
+                mirror_uv = GetBool(dict, "mirror_uv"),
+                texture_name = GetString(dict, "texture_name")
             };
+
+            if (dict.TryGetValue("children", out var elementChildren) && elementChildren is List<object> childList)
+                element.children = childList;
+            if (dict.TryGetValue("vertex_weights", out var weightsObject) &&
+                weightsObject is Dictionary<string, object> weights)
+                foreach (var weight in weights)
+                    element.vertex_weights[weight.Key] = ConvertToFloat(weight.Value);
 
             // Parse faces
             if (dict.TryGetValue("faces", out var facesObj) && facesObj is Dictionary<string, object> facesDict)
@@ -153,7 +223,8 @@ namespace Essentials.BlockbenchImporter.Parsing
                             rotation = GetInt(faceDict, "rotation"),
                             tint = GetNullableInt(faceDict, "tint"),
                             cullface = GetString(faceDict, "cullface"),
-                            enabled = GetBool(faceDict, "enabled", true)
+                            enabled = (!faceDict.ContainsKey("texture") || faceDict["texture"] != null) &&
+                                      GetBool(faceDict, "enabled", true)
                         };
                         element.faces[kvp.Key] = face;
                     }
@@ -183,7 +254,9 @@ namespace Essentials.BlockbenchImporter.Parsing
                     {
                         var meshFace = new BbMeshFace
                         {
-                            texture = GetInt(faceDict, "texture", -1)
+                            texture = GetInt(faceDict, "texture", -1),
+                            enabled = (!faceDict.ContainsKey("texture") || faceDict["texture"] != null) &&
+                                      GetBool(faceDict, "enabled", true)
                         };
 
                         if (faceDict.TryGetValue("vertices", out var faceVerts) && faceVerts is List<object> vertList)
@@ -241,13 +314,15 @@ namespace Essentials.BlockbenchImporter.Parsing
             return new BbTexture
             {
                 path = GetString(dict, "path"),
+                relative_path = GetString(dict, "relative_path"),
                 name = GetString(dict, "name"),
                 folder = GetString(dict, "folder"),
                 @namespace = GetString(dict, "namespace"),
                 uuid = GetString(dict, "uuid"),
                 source = GetString(dict, "source"),
                 render_mode = GetString(dict, "render_mode", "default"),
-                render_sides = GetString(dict, "render_sides", "front"),
+                pbr_channel = GetString(dict, "pbr_channel", "color"),
+                render_sides = GetString(dict, "render_sides", "auto"),
                 frame_time = GetInt(dict, "frame_time", 1),
                 frame_count = GetInt(dict, "frame_count", 1),
                 visible = GetBool(dict, "visible", true),
@@ -289,7 +364,9 @@ namespace Essentials.BlockbenchImporter.Parsing
                         var animator = new BbAnimator
                         {
                             name = GetString(animatorDict, "name"),
-                            type = GetString(animatorDict, "type", "bone")
+                            type = GetString(animatorDict, "type", "bone"),
+                            rotation_global = GetBool(animatorDict, "rotation_global"),
+                            quaternion_interpolation = GetBool(animatorDict, "quaternion_interpolation")
                         };
 
                         if (animatorDict.TryGetValue("keyframes", out var keyframesObj) && keyframesObj is List<object> keyframesList)
@@ -360,7 +437,25 @@ namespace Essentials.BlockbenchImporter.Parsing
         {
             var result = new List<OutlinerNode>();
             BuildHierarchyRecursive(model.outliner, model, result);
+            var referenced = new HashSet<string>();
+            CollectUuids(result, referenced);
+            foreach (BbElement element in model.elements)
+            {
+                if (string.IsNullOrEmpty(element.uuid) || referenced.Contains(element.uuid)) continue;
+                result.Add(new OutlinerNode { uuid = element.uuid, element = element });
+                model.warnings.Add("Element '" + (element.name ?? element.uuid) +
+                                   "' was absent from the outliner and was recovered at the model root.");
+            }
             return result;
+        }
+
+        private static void CollectUuids(IEnumerable<OutlinerNode> nodes, HashSet<string> result)
+        {
+            foreach (OutlinerNode node in nodes)
+            {
+                if (!string.IsNullOrEmpty(node.uuid)) result.Add(node.uuid);
+                CollectUuids(node.children, result);
+            }
         }
 
         private static void BuildHierarchyRecursive(List<object> items, BbModel model, List<OutlinerNode> result)
@@ -378,6 +473,8 @@ namespace Essentials.BlockbenchImporter.Parsing
                             uuid = uuid,
                             element = element
                         };
+                        if (element.children != null && element.children.Count != 0)
+                            BuildHierarchyRecursive(element.children, model, node.children);
                         result.Add(node);
                     }
                 }
@@ -473,6 +570,15 @@ namespace Essentials.BlockbenchImporter.Parsing
                     return result;
             }
             return defaultValue;
+        }
+
+        private static float ConvertToFloat(object value)
+        {
+            if (value is double d) return (float)d;
+            if (value is long l) return l;
+            if (value is float f) return f;
+            return float.TryParse(value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture,
+                out float result) ? result : 0f;
         }
 
         private static float[] GetFloatArray(Dictionary<string, object> dict, string key, float[] defaultValue)

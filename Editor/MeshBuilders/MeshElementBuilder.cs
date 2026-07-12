@@ -14,7 +14,8 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
         /// <summary>
         /// Build a mesh from a Blockbench mesh element.
         /// </summary>
-        public static CubeMeshResult BuildMeshElement(BbElement element, int[] textureResolution, int textureCount)
+        public static CubeMeshResult BuildMeshElement(BbElement element, int[] textureResolution, int textureCount,
+            IReadOnlyList<BbTexture> textures = null)
         {
             var result = new CubeMeshResult();
 
@@ -43,33 +44,43 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
             var verticesList = new List<Vector3>();
             var normalsList = new List<Vector3>();
             var uvsList = new List<Vector2>();
+            var sourceVertexIds = new List<string>();
             var trianglesByTexture = new Dictionary<int, List<int>>();
 
             foreach (var faceKvp in element.meshFaces)
             {
                 var face = faceKvp.Value;
-                if (face.vertices == null || face.vertices.Count < 3)
+                if (!face.enabled || face.vertices == null || face.vertices.Count < 3)
                     continue;
 
                 int textureIndex = face.texture;
-                if (!trianglesByTexture.ContainsKey(textureIndex))
-                    trianglesByTexture[textureIndex] = new List<int>();
+                int submeshKey = textureIndex < 0 ? -1 - Mathf.Abs(element.color % 10) : textureIndex;
+                if (!trianglesByTexture.ContainsKey(submeshKey))
+                    trianglesByTexture[submeshKey] = new List<int>();
 
                 // Get vertices for this face
                 var faceVerts = new List<Vector3>();
                 var faceUvs = new List<Vector2>();
+                int faceTexWidth = texWidth;
+                int faceTexHeight = texHeight;
+                if (textures != null && textureIndex >= 0 && textureIndex < textures.Count)
+                {
+                    faceTexWidth = Mathf.Max(1, textures[textureIndex].uv_width);
+                    faceTexHeight = Mathf.Max(1, textures[textureIndex].uv_height);
+                }
 
                 foreach (var vertId in face.vertices)
                 {
                     if (vertexLookup.TryGetValue(vertId, out var pos))
                     {
                         faceVerts.Add(pos);
+                        sourceVertexIds.Add(vertId);
 
                         // Get UV for this vertex
                         if (face.uv != null && face.uv.TryGetValue(vertId, out var uvCoords) && uvCoords.Length >= 2)
                         {
-                            float u = uvCoords[0] / texWidth;
-                            float v = 1f - uvCoords[1] / texHeight; // Flip V
+                            float u = uvCoords[0] / faceTexWidth;
+                            float v = 1f - uvCoords[1] / faceTexHeight; // Flip V
                             faceUvs.Add(new Vector2(u, v));
                         }
                         else
@@ -86,7 +97,8 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
                 Vector3 normal = CalculateFaceNormal(faceVerts);
 
                 // Triangulate the face
-                var triangles = TriangulateFace(faceVerts, normal);
+                var triangles = EarClipTriangulate(faceVerts, normal);
+                EnsureWindingMatchesNormal(triangles, faceVerts, normal);
 
                 // Add vertices and triangles
                 int baseVertex = verticesList.Count;
@@ -98,7 +110,7 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
                     uvsList.Add(faceUvs[i]);
                 }
 
-                var tris = trianglesByTexture[textureIndex];
+                var tris = trianglesByTexture[submeshKey];
                 foreach (var triIdx in triangles)
                 {
                     tris.Add(baseVertex + triIdx);
@@ -137,6 +149,7 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
             // Don't calculate tangents - match glTF export which doesn't include them
 
             result.mesh = mesh;
+            result.sourceVertexIds = sourceVertexIds.ToArray();
             return result;
         }
 
@@ -171,6 +184,19 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
             }
 
             return normal.sqrMagnitude > 0.0001f ? normal : Vector3.up;
+        }
+
+        private static void EnsureWindingMatchesNormal(List<int> triangles, List<Vector3> vertices, Vector3 normal)
+        {
+            for (int index = 0; index + 2 < triangles.Count; index += 3)
+            {
+                Vector3 cross = Vector3.Cross(vertices[triangles[index + 1]] - vertices[triangles[index]],
+                    vertices[triangles[index + 2]] - vertices[triangles[index]]);
+                if (Vector3.Dot(cross, normal) >= 0f) continue;
+                int swap = triangles[index + 1];
+                triangles[index + 1] = triangles[index + 2];
+                triangles[index + 2] = swap;
+            }
         }
 
         /// <summary>

@@ -1,20 +1,29 @@
 {
   "name": "com.essentials.blockbenchimporter",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "displayName": "Blockbench Importer",
-  "description": "Import Blockbench models into Unity.",
+  "description": "Drag-and-drop Blockbench project importer with faithful Unity hierarchy, geometry, textures, materials, armatures, animations, and Animator generation.",
   "unity": "2021.3",
   "unityRelease": "0b1",
-  "licensesUrl": "https://github.com/EssentialsForUnity/com.essentials.blockbenchimporter/blob/main/LICENSE.md",
-  "license": "SEE LICENSE IN LICENSE.md",
+  "documentationUrl": "https://github.com/martincalander/UnityBlockbenchImporter/blob/main/Documentation~/index.md",
+  "changelogUrl": "https://github.com/martincalander/UnityBlockbenchImporter/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/martincalander/UnityBlockbenchImporter/blob/main/LICENSE.md",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/martincalander/UnityBlockbenchImporter.git"
+  },
   "keywords": [
-    "Editor",
-    "Importer",
-    "Blockbench",
-    "Models"
+    "blockbench",
+    "bbmodel",
+    "editor",
+    "importer",
+    "model",
+    "animation",
+    "pixel-art"
   ],
   "author": {
-    "name": "Essentials",
+    "name": "Martin Calander",
     "url": "https://martincalander.com",
     "email": "martin.calander@gmail.com"
   },

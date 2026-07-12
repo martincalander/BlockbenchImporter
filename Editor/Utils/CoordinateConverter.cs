@@ -56,6 +56,13 @@ namespace Essentials.BlockbenchImporter.Utils
             return new Vector3(-x, y, z);
         }
 
+        public static Vector3 ConvertPositionRaw(float[] coordinates)
+        {
+            return coordinates == null || coordinates.Length < 3
+                ? Vector3.zero
+                : ConvertPositionRaw(coordinates[0], coordinates[1], coordinates[2]);
+        }
+
         /// <summary>
         /// Convert a direction/normal vector from Blockbench to Unity.
         /// No axis changes needed - same orientation.
@@ -83,9 +90,12 @@ namespace Essentials.BlockbenchImporter.Utils
         /// </summary>
         public static Quaternion ConvertRotation(float xDeg, float yDeg, float zDeg)
         {
-            // When we negate X axis (mirror across YZ plane), rotations around Y and Z
-            // need to be negated to maintain the same visual orientation
-            return Quaternion.Euler(xDeg, -yDeg, -zDeg);
+            // Blockbench/Three.js uses XYZ Euler order. Quaternion.Euler uses Unity's
+            // ZXY order, so compose the axes explicitly. Mirroring X changes the
+            // handedness and therefore negates rotations around Y and Z.
+            return Quaternion.AngleAxis(xDeg, Vector3.right) *
+                   Quaternion.AngleAxis(-yDeg, Vector3.up) *
+                   Quaternion.AngleAxis(-zDeg, Vector3.forward);
         }
 
         /// <summary>
@@ -143,7 +153,8 @@ namespace Essentials.BlockbenchImporter.Utils
         }
 
         /// <summary>
-        /// Get the 4 corner indices for a cube face (in counter-clockwise order when viewed from outside).
+        /// Get cube corner indices in Blockbench UV order: bottom-left, bottom-right,
+        /// top-right, top-left. Winding is selected separately after mirroring.
         /// Returns indices into the 8-corner cube array.
         /// </summary>
         public static int[] GetFaceCornerIndices(string faceName)
@@ -158,15 +169,14 @@ namespace Essentials.BlockbenchImporter.Utils
             // 6: max.x, max.y, max.z
             // 7: min.x, max.y, max.z
 
-            // Winding order: counter-clockwise when viewed from outside the cube
             switch (faceName.ToLowerInvariant())
             {
-                case "north": return new[] { 1, 0, 3, 2 }; // -Z face (front)
-                case "south": return new[] { 4, 5, 6, 7 }; // +Z face (back)
-                case "east": return new[] { 5, 1, 2, 6 };  // +X face (right)
-                case "west": return new[] { 0, 4, 7, 3 };  // -X face (left)
-                case "up": return new[] { 3, 7, 6, 2 };    // +Y face (top)
-                case "down": return new[] { 0, 1, 5, 4 };  // -Y face (bottom)
+                case "north": return new[] { 0, 1, 2, 3 };
+                case "south": return new[] { 5, 4, 7, 6 };
+                case "east": return new[] { 4, 0, 3, 7 };
+                case "west": return new[] { 1, 5, 6, 2 };
+                case "up": return new[] { 6, 7, 3, 2 };
+                case "down": return new[] { 1, 0, 4, 5 };
                 default: return new[] { 0, 1, 2, 3 };
             }
         }

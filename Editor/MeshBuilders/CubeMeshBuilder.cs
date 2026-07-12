@@ -20,7 +20,9 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
         /// <param name="textureResolution">Resolution from model (width, height)</param>
         /// <param name="textureCount">Number of textures in the model</param>
         /// <returns>Mesh with submeshes per texture</returns>
-        public static CubeMeshResult BuildCubeMesh(BbElement element, int[] textureResolution, int textureCount)
+        public static CubeMeshResult BuildCubeMesh(BbElement element, int[] textureResolution, int textureCount,
+            bool generateBackfaces = false, System.Func<int, bool> isDoubleSidedTexture = null,
+            IReadOnlyList<BbTexture> textures = null)
         {
             var result = new CubeMeshResult();
 
@@ -30,11 +32,19 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
                 return result;
             }
 
-            // Apply inflate
-            float inflate = element.inflate;
-            // Negate X to match glTF export coordinate system
-            Vector3 from = new Vector3(-(element.from[0] - inflate), element.from[1] - inflate, element.from[2] - inflate);
-            Vector3 to = new Vector3(-(element.to[0] + inflate), element.to[1] + inflate, element.to[2] + inflate);
+            // Blockbench stretches the inflated half-size around the cube center.
+            var adjustedFrom = new float[3];
+            var adjustedTo = new float[3];
+            for (int axis = 0; axis < 3; axis++)
+            {
+                float center = (element.from[axis] + element.to[axis]) * 0.5f;
+                float halfSize = Mathf.Abs(element.to[axis] - element.from[axis]) * 0.5f;
+                float stretch = element.stretch != null && element.stretch.Length > axis ? element.stretch[axis] : 1f;
+                adjustedFrom[axis] = center - (halfSize + element.inflate) * stretch;
+                adjustedTo[axis] = center + (halfSize + element.inflate) * stretch;
+            }
+            Vector3 from = new Vector3(-adjustedFrom[0], adjustedFrom[1], adjustedFrom[2]);
+            Vector3 to = new Vector3(-adjustedTo[0], adjustedTo[1], adjustedTo[2]);
 
             // Convert to element-local space (subtract origin)
             // Geometry is built relative to the element's origin/pivot
@@ -65,9 +75,6 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
             var uvsList = new List<Vector2>();
             var trianglesByTexture = new Dictionary<int, List<int>>();
 
-            int texWidth = textureResolution != null && textureResolution.Length > 0 ? textureResolution[0] : 16;
-            int texHeight = textureResolution != null && textureResolution.Length > 1 ? textureResolution[1] : 16;
-
             foreach (var faceName in FaceNames)
             {
                 if (!element.faces.TryGetValue(faceName, out var face))
@@ -81,7 +88,7 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
                 if (textureIndex < -1) textureIndex = -1;
 
                 // Use -1 as "no texture" material slot, map to index 0 for submesh if no textures
-                int submeshKey = textureIndex;
+                int submeshKey = textureIndex < 0 ? -1 - Mathf.Abs(element.color % 10) : textureIndex;
                 if (!trianglesByTexture.ContainsKey(submeshKey))
                     trianglesByTexture[submeshKey] = new List<int>();
 
@@ -89,6 +96,14 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
                 int[] cornerIndices = CoordinateConverter.GetFaceCornerIndices(faceName);
 
                 int baseVertex = verticesList.Count;
+
+                int texWidth = textureResolution != null && textureResolution.Length > 0 ? textureResolution[0] : 16;
+                int texHeight = textureResolution != null && textureResolution.Length > 1 ? textureResolution[1] : 16;
+                if (textures != null && textureIndex >= 0 && textureIndex < textures.Count)
+                {
+                    texWidth = Mathf.Max(1, textures[textureIndex].uv_width);
+                    texHeight = Mathf.Max(1, textures[textureIndex].uv_height);
+                }
 
                 // Add 4 vertices for this face
                 for (int i = 0; i < 4; i++)
@@ -118,14 +133,12 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
                     uvsList.Add(baseUvs[rotatedIndex]);
                 }
 
-                // Add triangles (winding reversed due to X-axis negation)
                 var tris = trianglesByTexture[submeshKey];
-                tris.Add(baseVertex + 0);
-                tris.Add(baseVertex + 2);
-                tris.Add(baseVertex + 1);
-                tris.Add(baseVertex + 0);
-                tris.Add(baseVertex + 3);
-                tris.Add(baseVertex + 2);
+                bool reverse = Vector3.Dot(Vector3.Cross(verticesList[baseVertex + 1] - verticesList[baseVertex],
+                    verticesList[baseVertex + 2] - verticesList[baseVertex]), normal) < 0f;
+                AddQuad(tris, baseVertex, reverse);
+                if (generateBackfaces && isDoubleSidedTexture != null && isDoubleSidedTexture(textureIndex))
+                    AddQuad(tris, baseVertex, !reverse);
             }
 
             // Build mesh
@@ -158,6 +171,16 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
 
             result.mesh = mesh;
             return result;
+        }
+
+        private static void AddQuad(List<int> triangles, int start, bool reverse)
+        {
+            triangles.Add(start);
+            triangles.Add(start + (reverse ? 2 : 1));
+            triangles.Add(start + (reverse ? 1 : 2));
+            triangles.Add(start);
+            triangles.Add(start + (reverse ? 3 : 2));
+            triangles.Add(start + (reverse ? 2 : 3));
         }
 
         /// <summary>
@@ -252,5 +275,6 @@ namespace Essentials.BlockbenchImporter.MeshBuilders
     {
         public Mesh mesh;
         public int[] textureIndices = new int[0]; // Texture index for each submesh
+        public string[] sourceVertexIds = new string[0];
     }
 }

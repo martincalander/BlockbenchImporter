@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Unity Blockbench Importer mark</title>
+  <desc id="desc">A blue model cube travels through an import frame along a check-shaped path.</desc>
+  <rect width="256" height="256" rx="56" fill="#0b1220"/>
+  <path d="M68 55h94a29 29 0 0 1 29 29v26" fill="none" stroke="#3b82f6" stroke-width="18" stroke-linecap="round"/>
+  <path d="M78 141l39 39 73-82" fill="none" stroke="#2dd4bf" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M48 74l35-20 35 20v40l-35 20-35-20z" fill="#2563eb"/>
+  <path d="M48 74l35 20 35-20-35-20z" fill="#60a5fa"/>
+  <path d="M83 94v40l35-20V74z" fill="#1d4ed8"/>
+  <path d="M48 74v40l35 20V94z" fill="#3b82f6"/>
+</svg>

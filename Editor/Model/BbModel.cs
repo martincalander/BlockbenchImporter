@@ -13,7 +13,7 @@ namespace Essentials.BlockbenchImporter.Model
         public BbMeta meta;
         public string name;
         public string model_identifier;
-        public bool visible_box = true;
+        public float[] visible_box = { 1f, 1f, 0f };
         public int[] resolution = { 16, 16 };
         public List<BbElement> elements = new List<BbElement>();
         public List<object> outliner = new List<object>(); // Can be strings (UUIDs) or group objects
@@ -27,6 +27,7 @@ namespace Essentials.BlockbenchImporter.Model
         [NonSerialized] public Dictionary<string, BbGroup> groupsByUuid = new Dictionary<string, BbGroup>();
         [NonSerialized] public Dictionary<int, BbTexture> texturesById = new Dictionary<int, BbTexture>();
         [NonSerialized] public Dictionary<string, BbTexture> texturesByUuid = new Dictionary<string, BbTexture>();
+        [NonSerialized] public List<string> warnings = new List<string>();
 
         public void BuildLookupTables()
         {
@@ -84,15 +85,28 @@ namespace Essentials.BlockbenchImporter.Model
         public bool locked;
         public bool render_order;
         public bool allow_mirror_modeling;
+        public bool export = true;
+        public bool visibility = true;
+        public bool shade = true;
         public float[] from = { 0, 0, 0 };
         public float[] to = { 16, 16, 16 };
         public int autouv;
-        public float[] color;
+        public int color;
         public float inflate;
-        public float[] origin = { 8, 8, 8 };
+        public float[] stretch = { 1f, 1f, 1f };
+        public float[] origin = { 0, 0, 0 };
+        public float[] position;
+        public float[] local_pivot;
         public float[] rotation;
+        public float[] scale = { 1f, 1f, 1f };
+        public float[] size = { 2f, 2f };
+        public float[] offset = { 0f, 0f };
+        public string facing_mode = "lookat";
         public float[] uv_offset;
         public bool mirror_uv;
+        public string texture_name;
+        public List<object> children = new List<object>();
+        [NonSerialized] public Dictionary<string, float> vertex_weights = new Dictionary<string, float>();
         [NonSerialized] public Dictionary<string, BbFace> faces = new Dictionary<string, BbFace>();
 
         // For mesh elements
@@ -117,6 +131,7 @@ namespace Essentials.BlockbenchImporter.Model
         public List<string> vertices = new List<string>(); // vertex UUIDs
         [NonSerialized] public Dictionary<string, float[]> uv = new Dictionary<string, float[]>(); // vertex UUID -> [u, v]
         public int texture = -1;
+        public bool enabled = true;
     }
 
     [Serializable]
@@ -140,13 +155,15 @@ namespace Essentials.BlockbenchImporter.Model
     public class BbTexture
     {
         public string path;
+        public string relative_path;
         public string name;
         public string folder;
         public string @namespace;
         public string uuid;
         public string source; // "data:image/png;base64,..." for embedded
         public string render_mode = "default"; // "default", "emissive", "layered"
-        public string render_sides = "front"; // "front", "back", "double"
+        public string pbr_channel = "color";
+        public string render_sides = "auto"; // "auto", "front", "back", "double"
         public int frame_time = 1;
         public int frame_count = 1;
         public int frame_order_type;
@@ -189,6 +206,8 @@ namespace Essentials.BlockbenchImporter.Model
     {
         public string name;
         public string type = "bone"; // typically "bone"
+        public bool rotation_global;
+        public bool quaternion_interpolation;
         public List<BbKeyframe> keyframes = new List<BbKeyframe>();
     }
 

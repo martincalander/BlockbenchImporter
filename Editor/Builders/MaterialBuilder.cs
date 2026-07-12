@@ -18,7 +18,12 @@ namespace Essentials.BlockbenchImporter.Builders
 
         private readonly Dictionary<int, Texture2D> builtTextures = new Dictionary<int, Texture2D>();
         private readonly Dictionary<int, Material> builtMaterials = new Dictionary<int, Material>();
-        private Material defaultMaterial;
+        private readonly Dictionary<int, Material> markerMaterials = new Dictionary<int, Material>();
+        private static readonly Color[] MarkerColors =
+        {
+            Html("A2EBFF"), Html("FFF899"), Html("F1BB75"), Html("FF9B97"), Html("C5A6E8"),
+            Html("A6C8FF"), Html("7BFFA3"), Html("BDFFA6"), Html("FFA5D5"), Html("E0E9FB")
+        };
 
         public MaterialBuilder(BbModel model, string assetPath, BlockbenchImporterSettings settings)
         {
@@ -33,6 +38,7 @@ namespace Essentials.BlockbenchImporter.Builders
         public Dictionary<int, Texture2D> BuildTextures()
         {
             builtTextures.Clear();
+            if (!settings.importTextures) return builtTextures;
 
             for (int i = 0; i < model.textures.Count; i++)
             {
@@ -73,7 +79,7 @@ namespace Essentials.BlockbenchImporter.Builders
             if (builtMaterials.TryGetValue(textureIndex, out var mat))
                 return mat;
 
-            return GetDefaultMaterial();
+            return GetMarkerMaterial(Mathf.Max(0, -textureIndex - 1));
         }
 
         /// <summary>
@@ -92,13 +98,12 @@ namespace Essentials.BlockbenchImporter.Builders
         /// <summary>
         /// Get or create a default material for faces without textures.
         /// </summary>
-        public Material GetDefaultMaterial()
+        public Material GetMarkerMaterial(int colorIndex)
         {
-            if (defaultMaterial != null)
-                return defaultMaterial;
-
-            defaultMaterial = CreateDefaultMaterial();
-            return defaultMaterial;
+            colorIndex = Mathf.Abs(colorIndex) % MarkerColors.Length;
+            if (!markerMaterials.TryGetValue(colorIndex, out Material material))
+                markerMaterials[colorIndex] = material = CreateDefaultMaterial(colorIndex);
+            return material;
         }
 
         /// <summary>
@@ -116,8 +121,8 @@ namespace Essentials.BlockbenchImporter.Builders
         {
             foreach (var mat in builtMaterials.Values)
                 yield return mat;
-            if (defaultMaterial != null)
-                yield return defaultMaterial;
+            foreach (var material in markerMaterials.Values)
+                yield return material;
         }
 
         private Texture2D CreateTexture(BbTexture texDef, int index)
@@ -130,9 +135,12 @@ namespace Essentials.BlockbenchImporter.Builders
                 imageData = DecodeBase64Image(texDef.source);
             }
             // Try to load from external path
-            else if (!string.IsNullOrEmpty(texDef.path))
+            else
             {
-                imageData = LoadExternalTexture(texDef.path);
+                if (!string.IsNullOrEmpty(texDef.relative_path))
+                    imageData = LoadExternalTexture(texDef.relative_path, false);
+                if ((imageData == null || imageData.Length == 0) && !string.IsNullOrEmpty(texDef.path))
+                    imageData = LoadExternalTexture(texDef.path, true);
             }
 
             if (imageData == null || imageData.Length == 0)
@@ -151,8 +159,8 @@ namespace Essentials.BlockbenchImporter.Builders
             }
 
             // Apply pixel art settings
-            texture.filterMode = settings.pixelArt ? FilterMode.Point : FilterMode.Bilinear;
-            texture.wrapMode = TextureWrapMode.Clamp;
+            texture.filterMode = settings.textureFilter;
+            texture.wrapMode = settings.textureWrap;
             texture.Apply(false, false); // Don't make read-only so we can check alpha
 
             return texture;
@@ -177,7 +185,7 @@ namespace Essentials.BlockbenchImporter.Builders
             }
         }
 
-        private byte[] LoadExternalTexture(string path)
+        private byte[] LoadExternalTexture(string path, bool reportMissing)
         {
             try
             {
@@ -195,7 +203,7 @@ namespace Essentials.BlockbenchImporter.Builders
                     return System.IO.File.ReadAllBytes(path);
                 }
 
-                Debug.LogWarning($"External texture not found: {path}");
+                if (reportMissing) Debug.LogWarning($"External texture not found: {path}");
                 return null;
             }
             catch (Exception e)
@@ -215,8 +223,9 @@ namespace Essentials.BlockbenchImporter.Builders
             material.mainTexture = texture;
 
             // Determine if we need alpha clipping
-            bool needsAlphaClip = settings.forceAlphaClip || HasTransparency(texture);
-            bool doubleSided = texDef.render_sides == "double";
+            bool needsAlphaClip = settings.alphaMode == BlockbenchAlphaMode.Cutout ||
+                                  (settings.alphaMode == BlockbenchAlphaMode.Auto && HasTransparency(texture));
+            bool doubleSided = texDef.render_sides == "double" || texDef.render_sides == "auto";
 
             // Configure material based on render pipeline
             ConfigureMaterial(material, needsAlphaClip, doubleSided, texDef);
@@ -224,13 +233,20 @@ namespace Essentials.BlockbenchImporter.Builders
             return material;
         }
 
-        private Material CreateDefaultMaterial()
+        private Material CreateDefaultMaterial(int colorIndex)
         {
             Shader shader = GetDefaultShader();
             var material = new Material(shader);
-            material.name = "Default_NoTexture";
-            material.color = new Color(0.8f, 0.8f, 0.8f, 1f);
+            material.name = "Untextured_" + colorIndex;
+            material.color = MarkerColors[colorIndex];
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", MarkerColors[colorIndex]);
             return material;
+        }
+
+        private static Color Html(string value)
+        {
+            ColorUtility.TryParseHtmlString("#" + value, out Color color);
+            return color;
         }
 
         private Shader GetShader(BbTexture texDef)
@@ -245,7 +261,9 @@ namespace Essentials.BlockbenchImporter.Builders
                 // URP
                 if (pipelineName.Contains("Universal") || pipelineName.Contains("URP"))
                 {
-                    var shader = Shader.Find("Universal Render Pipeline/Lit");
+                    var shader = Shader.Find(settings.materialMode == BlockbenchMaterialMode.Unlit
+                        ? "Universal Render Pipeline/Unlit"
+                        : "Universal Render Pipeline/Lit");
                     if (shader != null) return shader;
 
                     shader = Shader.Find("Universal Render Pipeline/Simple Lit");
@@ -255,13 +273,16 @@ namespace Essentials.BlockbenchImporter.Builders
                 // HDRP
                 if (pipelineName.Contains("HD") || pipelineName.Contains("HDRP"))
                 {
-                    var shader = Shader.Find("HDRP/Lit");
+                    var shader = Shader.Find(settings.materialMode == BlockbenchMaterialMode.Unlit
+                        ? "HDRP/Unlit"
+                        : "HDRP/Lit");
                     if (shader != null) return shader;
                 }
             }
 
             // Built-in pipeline
-            return Shader.Find("Standard");
+            return Shader.Find(settings.materialMode == BlockbenchMaterialMode.Unlit ? "Unlit/Texture" : "Standard")
+                   ?? Shader.Find("Standard");
         }
 
         private Shader GetDefaultShader()
@@ -376,6 +397,13 @@ namespace Essentials.BlockbenchImporter.Builders
             }
         }
 
+        public bool IsDoubleSidedTexture(int textureIndex)
+        {
+            if (textureIndex < 0 || textureIndex >= model.textures.Count) return false;
+            string sides = model.textures[textureIndex].render_sides;
+            return sides == "double" || sides == "auto";
+        }
+
         private string SanitizeName(string name)
         {
             if (string.IsNullOrEmpty(name))
@@ -398,35 +426,31 @@ namespace Essentials.BlockbenchImporter.Builders
     [Serializable]
     public class BlockbenchImporterSettings
     {
-        public float scale = 1f;
+        public float unitsPerPixel = 1f / 16f;
         public bool importAnimations = true;
         public bool createAnimatorController = true;
         public bool importTextures = true;
-        public bool forceAlphaClip = true;
-        public bool pixelArt = true;
+        public bool includeHiddenElements;
+        public bool includeNonExportedElements;
+        public bool importBoundingBoxesAsColliders = true;
+        public bool generateBackfacesForDoubleSidedTextures;
+        public BlockbenchMaterialMode materialMode = BlockbenchMaterialMode.Unlit;
+        public FilterMode textureFilter = FilterMode.Point;
+        public TextureWrapMode textureWrap = TextureWrapMode.Clamp;
+        public BlockbenchAlphaMode alphaMode = BlockbenchAlphaMode.Auto;
         public float alphaCutoff = 0.5f;
-        public UnitsMode unitsMode = UnitsMode.PixelsAre1Unit;
-
-        public float GetUnitsScale()
-        {
-            switch (unitsMode)
-            {
-                case UnitsMode.PixelsAre1Unit:
-                    return 1f / 16f; // 16 pixels = 1 unit
-                case UnitsMode.SixteenPixelsPerUnit:
-                    return 1f / 16f;
-                case UnitsMode.Custom:
-                    return scale;
-                default:
-                    return 1f / 16f;
-            }
-        }
     }
 
-    public enum UnitsMode
+    public enum BlockbenchMaterialMode
     {
-        PixelsAre1Unit,
-        SixteenPixelsPerUnit,
-        Custom
+        Unlit,
+        Lit
+    }
+
+    public enum BlockbenchAlphaMode
+    {
+        Auto,
+        Opaque,
+        Cutout
     }
 }

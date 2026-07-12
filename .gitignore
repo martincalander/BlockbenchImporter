@@ -73,6 +73,12 @@ test-results/
 node_modules/
 .npm/
 .nyc_output/
+__pycache__/
+*.py[cod]
+
+# UPM reserves Documentation~ for package manuals; override global editor-backup rules.
+!Documentation~/
+!Documentation~/**
 
 # Local assistant/tool output
 /.codex/

@@ -10,305 +10,182 @@ using UnityEngine;
 
 namespace Essentials.BlockbenchImporter
 {
-    /// <summary>
-    /// Unity ScriptedImporter for Blockbench .bbmodel files.
-    /// Imports Blockbench models with support for:
-    /// - Groups/hierarchy with correct pivots and transforms
-    /// - Cube and mesh elements
-    /// - Multiple textures with per-face assignment
-    /// - Animations with Mecanim Animator support
-    /// </summary>
-    [ScriptedImporter(13, "bbmodel")]
-    public class BlockbenchImporter : ScriptedImporter
+    [ScriptedImporter(20, "bbmodel")]
+    public sealed class BlockbenchImporter : ScriptedImporter
     {
-        [Header("Scale Settings")]
-        [Tooltip("Global scale multiplier applied to the model")]
-        public float scale = 1f;
+        [SerializeField, Min(0.000001f)] private float unitsPerPixel = 1f / 16f;
+        [SerializeField] private bool importTextures = true;
+        [SerializeField] private bool importAnimations = true;
+        [SerializeField] private bool createAnimatorController = true;
+        [SerializeField] private BlockbenchMaterialMode materialMode = BlockbenchMaterialMode.Unlit;
+        [SerializeField] private FilterMode textureFilter = FilterMode.Point;
+        [SerializeField] private TextureWrapMode textureWrap = TextureWrapMode.Clamp;
+        [SerializeField] private BlockbenchAlphaMode alphaMode = BlockbenchAlphaMode.Auto;
+        [SerializeField, Range(0f, 1f)] private float alphaCutoff = 0.5f;
+        [SerializeField] private bool includeHiddenElements;
+        [SerializeField] private bool includeNonExportedElements;
+        [SerializeField] private bool importBoundingBoxesAsColliders = true;
+        [SerializeField] private bool generateBackfacesForDoubleSidedTextures;
 
-        [Tooltip("How to interpret Blockbench units")]
-        public UnitsMode unitsMode = UnitsMode.SixteenPixelsPerUnit;
-
-        [Header("Texture Settings")]
-        [Tooltip("Import textures embedded in the .bbmodel file")]
-        public bool importTextures = true;
-
-        [Tooltip("Use point filtering for pixel art style")]
-        public bool pixelArt = true;
-
-        [Tooltip("Force alpha cutout mode on materials to prevent see-through artifacts")]
-        public bool forceAlphaClip = true;
-
-        [Tooltip("Alpha cutoff threshold for cutout materials")]
-        [Range(0f, 1f)]
-        public float alphaCutoff = 0.5f;
-
-        [Header("Animation Settings")]
-        [Tooltip("Import animations from the .bbmodel file as AnimationClips")]
-        public bool importAnimations = true;
-
-        [Tooltip("Create an AnimatorController (experimental - may have issues with sub-asset serialization)")]
-        public bool createAnimatorController = false;
-
-        public override void OnImportAsset(AssetImportContext ctx)
+        public override void OnImportAsset(AssetImportContext context)
         {
             try
             {
-                // Read and parse the .bbmodel JSON
-                string json = File.ReadAllText(ctx.assetPath);
-                BbModel model = BbModelParser.Parse(json);
-
-                if (model == null)
-                {
-                    ctx.LogImportError("Failed to parse .bbmodel file");
-                    return;
-                }
-
-                // Create settings from importer fields
+                BbModel model = BbModelParser.Parse(File.ReadAllText(context.assetPath));
                 var settings = new BlockbenchImporterSettings
                 {
-                    scale = scale,
-                    unitsMode = unitsMode,
+                    unitsPerPixel = Mathf.Max(0.000001f, unitsPerPixel),
                     importTextures = importTextures,
-                    pixelArt = pixelArt,
-                    forceAlphaClip = forceAlphaClip,
-                    alphaCutoff = alphaCutoff,
                     importAnimations = importAnimations,
-                    createAnimatorController = createAnimatorController
+                    createAnimatorController = createAnimatorController,
+                    materialMode = materialMode,
+                    textureFilter = textureFilter,
+                    textureWrap = textureWrap,
+                    alphaMode = alphaMode,
+                    alphaCutoff = alphaCutoff,
+                    includeHiddenElements = includeHiddenElements,
+                    includeNonExportedElements = includeNonExportedElements,
+                    importBoundingBoxesAsColliders = importBoundingBoxesAsColliders,
+                    generateBackfacesForDoubleSidedTextures = generateBackfacesForDoubleSidedTextures
                 };
 
-                // Build textures and materials
-                var materialBuilder = new MaterialBuilder(model, ctx.assetPath, settings);
+                RegisterTextureDependencies(context, model);
 
-                if (importTextures)
-                {
-                    materialBuilder.BuildTextures();
-                }
+                var materials = new MaterialBuilder(model, context.assetPath, settings);
+                materials.BuildTextures();
+                materials.BuildMaterials();
 
-                materialBuilder.BuildMaterials();
-
-                // Build hierarchy
-                var hierarchyBuilder = new HierarchyBuilder(model, settings, materialBuilder);
-                GameObject root = hierarchyBuilder.BuildHierarchy();
-
+                var hierarchy = new HierarchyBuilder(model, settings, materials);
+                GameObject root = hierarchy.BuildHierarchy();
+                foreach (string warning in model.warnings)
+                    context.LogImportWarning(warning);
+                foreach (string warning in hierarchy.Warnings)
+                    context.LogImportWarning(warning);
                 if (root == null)
+                    throw new InvalidDataException("The Blockbench outliner did not produce a root object.");
+
+                var identifiers = new HashSet<string>(StringComparer.Ordinal);
+                Add(context, identifiers, "prefab", root);
+                context.SetMainObject(root);
+
+                foreach (Texture2D texture in materials.GetAllTextures())
+                    Add(context, identifiers, "texture_" + texture.name, texture);
+                foreach (Material material in materials.GetAllMaterials())
+                    Add(context, identifiers, "material_" + material.name, material);
+                foreach (Mesh mesh in hierarchy.BuiltMeshes)
+                    Add(context, identifiers, "mesh_" + mesh.name, mesh);
+
+                if (settings.importAnimations && model.animations.Count != 0)
                 {
-                    ctx.LogImportError("Failed to build model hierarchy");
-                    return;
-                }
+                    var animationBuilder = new AnimationBuilder(model, hierarchy.UuidToPath,
+                        hierarchy.UuidToTransform, settings);
+                    List<AnimationClip> clips = animationBuilder.BuildAnimationClips();
+                    foreach (AnimationClip clip in clips)
+                        Add(context, identifiers, "animation_" + clip.name, clip);
 
-                // IMPORTANT: Add root GameObject FIRST and set as main object immediately
-                // This ensures the prefab is the main asset, not textures/materials
-                string rootName = root.name;
-                ctx.AddObjectToAsset(rootName, root);
-                ctx.SetMainObject(root);
-
-                // Track used identifiers to ensure uniqueness
-                var usedIdentifiers = new HashSet<string>();
-                usedIdentifiers.Add(rootName);
-
-                // Add sub-assets: textures
-                foreach (var texture in materialBuilder.GetAllTextures())
-                {
-                    string identifier = GetUniqueIdentifier($"tex_{texture.name}", usedIdentifiers);
-                    ctx.AddObjectToAsset(identifier, texture);
-                }
-
-                // Add sub-assets: materials
-                foreach (var material in materialBuilder.GetAllMaterials())
-                {
-                    string identifier = GetUniqueIdentifier($"mat_{material.name}", usedIdentifiers);
-                    ctx.AddObjectToAsset(identifier, material);
-                }
-
-                // Add sub-assets: meshes
-                foreach (var mesh in hierarchyBuilder.BuiltMeshes)
-                {
-                    string identifier = GetUniqueIdentifier($"mesh_{mesh.name}", usedIdentifiers);
-                    ctx.AddObjectToAsset(identifier, mesh);
-                }
-
-                // Build animations if enabled
-                if (importAnimations && model.animations != null && model.animations.Count > 0)
-                {
-                    var animationBuilder = new AnimationBuilder(
-                        model,
-                        hierarchyBuilder.UuidToPath,
-                        hierarchyBuilder.UuidToTransform,
-                        settings
-                    );
-
-                    var clips = animationBuilder.BuildAnimationClips();
-
-                    // Add animation clips as sub-assets
-                    foreach (var clip in clips)
+                    if (clips.Count != 0 && settings.createAnimatorController)
                     {
-                        // Mark as legacy clip for Animation component compatibility
-                        clip.legacy = !createAnimatorController;
-                        string identifier = GetUniqueIdentifier($"anim_{clip.name}", usedIdentifiers);
-                        ctx.AddObjectToAsset(identifier, clip);
-                    }
-
-                    if (clips.Count > 0)
-                    {
-                        if (createAnimatorController)
+                        AnimatorControllerResult controller = animationBuilder.BuildAnimatorController(clips, context.assetPath);
+                        if (controller != null)
                         {
-                            // Experimental: Create animator controller
-                            var controllerResult = animationBuilder.BuildAnimatorController(clips, ctx.assetPath);
-                            if (controllerResult != null && controllerResult.controller != null)
-                            {
-                                // Add controller as sub-asset
-                                string ctrlId = GetUniqueIdentifier($"ctrl_{controllerResult.controller.name}", usedIdentifiers);
-                                ctx.AddObjectToAsset(ctrlId, controllerResult.controller);
-                                
-                                // Add internal objects (state machine, states) as hidden sub-assets
-                                int subAssetIndex = 0;
-                                foreach (var subAsset in controllerResult.subAssets)
-                                {
-                                    string internalId = GetUniqueIdentifier($"ctrl_internal_{subAssetIndex++}", usedIdentifiers);
-                                    ctx.AddObjectToAsset(internalId, subAsset);
-                                }
-
-                                // Add Animator component to root
-                                var animator = root.AddComponent<Animator>();
-                                animator.runtimeAnimatorController = controllerResult.controller;
-                            }
-                        }
-                        else
-                        {
-                            // Use legacy Animation component (more reliable for sub-assets)
-                            var animation = root.AddComponent<Animation>();
-                            foreach (var clip in clips)
-                            {
-                                animation.AddClip(clip, clip.name);
-                            }
-                            if (clips.Count > 0)
-                            {
-                                animation.clip = clips[0];
-                            }
+                            Add(context, identifiers, "animator_controller", controller.controller);
+                            foreach (UnityEngine.Object child in controller.subAssets)
+                                Add(context, identifiers, "animator_" + child.name, child);
+                            root.AddComponent<Animator>().runtimeAnimatorController = controller.controller;
                         }
                     }
-                }
-
-                // Strip BlockbenchOriginMarker components (editor-only)
-                var markers = root.GetComponentsInChildren<BlockbenchOriginMarker>(true);
-                foreach (var marker in markers)
-                {
-                    DestroyImmediate(marker);
                 }
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                ctx.LogImportError($"Failed to import .bbmodel: {ex.Message}\n{ex.StackTrace}");
+                context.LogImportError("Blockbench import failed: " + exception.Message + "\n" + exception.StackTrace);
             }
         }
 
-        /// <summary>
-        /// Get a unique identifier for a sub-asset, appending a number if necessary.
-        /// </summary>
-        private static string GetUniqueIdentifier(string baseName, HashSet<string> usedIdentifiers)
+        private static void Add(AssetImportContext context, HashSet<string> identifiers, string proposed,
+            UnityEngine.Object value)
         {
-            if (!usedIdentifiers.Contains(baseName))
+            string clean = Sanitize(proposed);
+            string unique = clean;
+            for (int suffix = 2; !identifiers.Add(unique); suffix++)
+                unique = clean + "_" + suffix;
+            context.AddObjectToAsset(unique, value);
+        }
+
+        private static void RegisterTextureDependencies(AssetImportContext context, BbModel model)
+        {
+            string modelDirectory = Path.GetDirectoryName(context.assetPath) ?? string.Empty;
+            string projectRoot = Path.GetFullPath(".").Replace('\\', '/').TrimEnd('/');
+            foreach (BbTexture texture in model.textures)
             {
-                usedIdentifiers.Add(baseName);
-                return baseName;
+                RegisterDependency(context, modelDirectory, projectRoot, texture.relative_path);
+                RegisterDependency(context, modelDirectory, projectRoot, texture.path);
             }
+        }
 
-            // Find a unique suffix
-            int counter = 2;
-            string uniqueName;
-            do
-            {
-                uniqueName = $"{baseName}_{counter}";
-                counter++;
-            } while (usedIdentifiers.Contains(uniqueName));
+        private static void RegisterDependency(AssetImportContext context, string modelDirectory,
+            string projectRoot, string source)
+        {
+            if (string.IsNullOrEmpty(source)) return;
+            string candidate = Path.IsPathRooted(source)
+                ? Path.GetFullPath(source)
+                : Path.GetFullPath(Path.Combine(modelDirectory, source));
+            candidate = candidate.Replace('\\', '/');
+            if (!candidate.StartsWith(projectRoot + "/", StringComparison.Ordinal)) return;
+            string assetPath = candidate.Substring(projectRoot.Length + 1);
+            if ((assetPath.StartsWith("Assets/", StringComparison.Ordinal) ||
+                 assetPath.StartsWith("Packages/", StringComparison.Ordinal)) && File.Exists(candidate))
+                context.DependsOnSourceAsset(assetPath);
+        }
 
-            usedIdentifiers.Add(uniqueName);
-            return uniqueName;
+        internal static string Sanitize(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "unnamed";
+            foreach (char invalid in Path.GetInvalidFileNameChars()) value = value.Replace(invalid, '_');
+            return value.Trim().Replace('/', '_');
         }
     }
 
-    /// <summary>
-    /// Custom editor for the BlockbenchImporter with preview and validation.
-    /// </summary>
     [CustomEditor(typeof(BlockbenchImporter))]
-    public class BlockbenchImporterEditor : ScriptedImporterEditor
+    internal sealed class BlockbenchImporterEditor : ScriptedImporterEditor
     {
-        private SerializedProperty scaleProp;
-        private SerializedProperty unitsModeProp;
-        private SerializedProperty importTexturesProp;
-        private SerializedProperty pixelArtProp;
-        private SerializedProperty forceAlphaClipProp;
-        private SerializedProperty alphaCutoffProp;
-        private SerializedProperty importAnimationsProp;
-        private SerializedProperty createAnimatorControllerProp;
-
-        public override void OnEnable()
-        {
-            base.OnEnable();
-
-            scaleProp = serializedObject.FindProperty("scale");
-            unitsModeProp = serializedObject.FindProperty("unitsMode");
-            importTexturesProp = serializedObject.FindProperty("importTextures");
-            pixelArtProp = serializedObject.FindProperty("pixelArt");
-            forceAlphaClipProp = serializedObject.FindProperty("forceAlphaClip");
-            alphaCutoffProp = serializedObject.FindProperty("alphaCutoff");
-            importAnimationsProp = serializedObject.FindProperty("importAnimations");
-            createAnimatorControllerProp = serializedObject.FindProperty("createAnimatorController");
-        }
-
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
+            EditorGUILayout.LabelField("Geometry", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("unitsPerPixel"),
+                new GUIContent("Units Per Pixel", "1/16 matches Blockbench's default glTF export scale."));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("includeHiddenElements"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("includeNonExportedElements"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("importBoundingBoxesAsColliders"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("generateBackfacesForDoubleSidedTextures"));
 
-            EditorGUILayout.LabelField("Blockbench Importer", EditorStyles.boldLabel);
             EditorGUILayout.Space();
-
-            // Scale settings
-            EditorGUILayout.LabelField("Scale Settings", EditorStyles.boldLabel);
-            EditorGUILayout.PropertyField(scaleProp, new GUIContent("Scale", "Global scale multiplier"));
-            EditorGUILayout.PropertyField(unitsModeProp, new GUIContent("Units Mode", "How to interpret Blockbench units"));
-
-            EditorGUILayout.Space();
-
-            // Texture settings
-            EditorGUILayout.LabelField("Texture Settings", EditorStyles.boldLabel);
-            EditorGUILayout.PropertyField(importTexturesProp, new GUIContent("Import Textures", "Import embedded textures"));
-
-            using (new EditorGUI.DisabledScope(!importTexturesProp.boolValue))
+            EditorGUILayout.LabelField("Textures & Materials", EditorStyles.boldLabel);
+            SerializedProperty textures = serializedObject.FindProperty("importTextures");
+            EditorGUILayout.PropertyField(textures);
+            using (new EditorGUI.DisabledScope(!textures.boolValue))
             {
-                EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(pixelArtProp, new GUIContent("Pixel Art Mode", "Use point filtering"));
-                EditorGUILayout.PropertyField(forceAlphaClipProp, new GUIContent("Force Alpha Clip", "Prevent see-through artifacts"));
-                EditorGUILayout.PropertyField(alphaCutoffProp, new GUIContent("Alpha Cutoff", "Cutoff threshold"));
-                EditorGUI.indentLevel--;
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("materialMode"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("textureFilter"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("textureWrap"));
+                SerializedProperty alpha = serializedObject.FindProperty("alphaMode");
+                EditorGUILayout.PropertyField(alpha);
+                if ((BlockbenchAlphaMode)alpha.enumValueIndex != BlockbenchAlphaMode.Opaque)
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("alphaCutoff"));
             }
 
             EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Animation", EditorStyles.boldLabel);
+            SerializedProperty animations = serializedObject.FindProperty("importAnimations");
+            EditorGUILayout.PropertyField(animations);
+            using (new EditorGUI.DisabledScope(!animations.boolValue))
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("createAnimatorController"));
 
-            // Animation settings
-            EditorGUILayout.LabelField("Animation Settings", EditorStyles.boldLabel);
-            EditorGUILayout.PropertyField(importAnimationsProp, new GUIContent("Import Animations", "Import Blockbench animations"));
-
-            using (new EditorGUI.DisabledScope(!importAnimationsProp.boolValue))
-            {
-                EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(createAnimatorControllerProp, new GUIContent("Create Animator Controller", "Generate Mecanim controller"));
-                EditorGUI.indentLevel--;
-            }
-
-            EditorGUILayout.Space();
-
-            // Info box
             EditorGUILayout.HelpBox(
-                "Blockbench Importer imports .bbmodel files with support for:\n" +
-                "• Groups/hierarchy with correct pivots\n" +
-                "• Cube and mesh elements\n" +
-                "• Multiple textures per model\n" +
-                "• Animations with Mecanim support",
+                "The .bbmodel is the prefab. Embedded textures, materials, meshes, clips, and the optional Animator Controller are sub-assets.",
                 MessageType.Info);
-
             serializedObject.ApplyModifiedProperties();
-
             ApplyRevertGUI();
         }
     }

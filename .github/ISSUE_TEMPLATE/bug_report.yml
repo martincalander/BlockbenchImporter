@@ -1,0 +1,87 @@
+name: Bug report
+description: Report a reproducible import, fidelity, or package defect.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve the importer. Search existing issues first and never attach private or non-redistributable artwork.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and found no matching report.
+          required: true
+        - label: I can reproduce this with the latest tagged release.
+          required: true
+        - label: This is not a security vulnerability; security reports use SECURITY.md.
+          required: true
+  - type: input
+    id: package-version
+    attributes:
+      label: Package version
+      placeholder: v1.0.0
+    validations:
+      required: true
+  - type: input
+    id: unity-version
+    attributes:
+      label: Unity version and render pipeline
+      placeholder: 2022.3.60f1, URP 14
+    validations:
+      required: true
+  - type: input
+    id: blockbench-version
+    attributes:
+      label: Blockbench version and model format
+      placeholder: Blockbench 5.x, generic model
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include importer settings and the smallest sequence that reproduces the issue.
+      placeholder: |
+        1. Import ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result and Console output
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: model
+    attributes:
+      label: Minimal model or repository
+      description: Drag in a minimized `.bbmodel` you have permission to redistribute, or link a public repository.
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Blockbench and Unity screenshots
+      description: Drag images here, preferably from matching camera angles.
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
