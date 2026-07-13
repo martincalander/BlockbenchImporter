@@ -32,7 +32,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             // NOTE: For mesh elements, vertices are ALREADY stored in local space relative to origin
             // (unlike cube elements where from/to are in world coordinates)
             // So we only need to negate X to match glTF export - no origin subtraction needed
-            var vertexLookup = new Dictionary<string, Vector3>();
+            var vertexLookup = new Dictionary<string, Vector3>(element.vertices.Count);
             foreach (var kvp in element.vertices)
             {
                 // Negate X to match glTF export coordinate system
@@ -46,6 +46,8 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             var uvsList = new List<Vector2>();
             var sourceVertexIds = new List<string>();
             var trianglesByTexture = new Dictionary<int, List<int>>();
+            var faceVerts = new List<Vector3>();
+            var faceUvs = new List<Vector2>();
 
             foreach (var faceKvp in element.meshFaces)
             {
@@ -53,14 +55,18 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                 if (!face.enabled || face.vertices == null || face.vertices.Count < 3)
                     continue;
 
+                faceVerts.Clear();
+                faceUvs.Clear();
+
                 int textureIndex = face.texture;
                 int submeshKey = textureIndex < 0 ? -1 - Mathf.Abs(element.color % 10) : textureIndex;
-                if (!trianglesByTexture.ContainsKey(submeshKey))
-                    trianglesByTexture[submeshKey] = new List<int>();
+                if (!trianglesByTexture.TryGetValue(submeshKey, out List<int> submeshTriangles))
+                {
+                    submeshTriangles = new List<int>();
+                    trianglesByTexture[submeshKey] = submeshTriangles;
+                }
 
                 // Get vertices for this face
-                var faceVerts = new List<Vector3>();
-                var faceUvs = new List<Vector2>();
                 int faceTexWidth = texWidth;
                 int faceTexHeight = texHeight;
                 if (textures != null && textureIndex >= 0 && textureIndex < textures.Count)
@@ -110,10 +116,9 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                     uvsList.Add(faceUvs[i]);
                 }
 
-                var tris = trianglesByTexture[submeshKey];
                 foreach (var triIdx in triangles)
                 {
-                    tris.Add(baseVertex + triIdx);
+                    submeshTriangles.Add(baseVertex + triIdx);
                 }
             }
 
@@ -127,9 +132,9 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             // Use UInt32 index format to match glTF export
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 
-            mesh.vertices = verticesList.ToArray();
-            mesh.normals = normalsList.ToArray();
-            mesh.uv = uvsList.ToArray();
+            mesh.SetVertices(verticesList);
+            mesh.SetNormals(normalsList);
+            mesh.SetUVs(0, uvsList);
 
             // Build submeshes
             var sortedTextureIndices = new List<int>(trianglesByTexture.Keys);
@@ -141,7 +146,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             for (int i = 0; i < sortedTextureIndices.Count; i++)
             {
                 int texIdx = sortedTextureIndices[i];
-                mesh.SetTriangles(trianglesByTexture[texIdx].ToArray(), i);
+                mesh.SetTriangles(trianglesByTexture[texIdx], i, false);
                 result.textureIndices[i] = texIdx;
             }
 
@@ -266,7 +271,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             Vector3 u, v;
             GetOrthonormalBasis(normal, out u, out v);
 
-            var points2D = new List<Vector2>();
+            var points2D = new List<Vector2>(vertices.Count);
             foreach (var vert in vertices)
             {
                 float px = Vector3.Dot(vert, u);
@@ -286,7 +291,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             bool ccw = signedArea > 0;
 
             // Create index list
-            var indices = new List<int>();
+            var indices = new List<int>(vertices.Count);
             for (int i = 0; i < vertices.Count; i++)
                 indices.Add(i);
 

@@ -28,8 +28,9 @@ namespace MartinCalander.BlockbenchImporter.Tests
           ""meta"":{""format_version"":""5.0"",""model_format"":""free"",""box_uv"":false},
           ""name"":""Armature"",""resolution"":{""width"":16,""height"":16},
           ""elements"":[
-            {""name"":""rig"",""type"":""armature"",""uuid"":""armature"",""children"":[""bone"",""mesh0001""]},
-            {""name"":""bone"",""type"":""armature_bone"",""uuid"":""bone"",""origin"":[0,0,0],""rotation"":[0,0,0],""children"":[],""vertex_weights"":{""a"":1,""b"":1,""c"":1}},
+            {""name"":""rig"",""type"":""armature"",""uuid"":""armature"",""children"":[""bone_a"",""bone_b"",""mesh0001""]},
+            {""name"":""bone a"",""type"":""armature_bone"",""uuid"":""bone_a"",""origin"":[0,0,0],""rotation"":[0,0,0],""children"":[],""vertex_weights"":{""a"":1,""c"":0.25}},
+            {""name"":""bone b"",""type"":""armature_bone"",""uuid"":""bone_b"",""origin"":[0,0,0],""rotation"":[0,0,0],""children"":[],""vertex_weights"":{""b"":1,""c"":0.75}},
             {""name"":""triangle"",""type"":""mesh"",""uuid"":""mesh0001"",""origin"":[0,0,0],""vertices"":{""a"":[0,0,0],""b"":[1,0,0],""c"":[0,1,0]},""faces"":{""face"":{""vertices"":[""a"",""b"",""c""],""uv"":{""a"":[0,0],""b"":[1,0],""c"":[0,1]},""texture"":0}}}
           ],
           ""outliner"":[""armature""],
@@ -166,12 +167,19 @@ namespace MartinCalander.BlockbenchImporter.Tests
             var root = AssetDatabase.LoadMainAssetAtPath(ArmaturePath) as GameObject;
             var renderer = root.GetComponentInChildren<SkinnedMeshRenderer>();
             Assert.That(renderer, Is.Not.Null);
-            Assert.That(renderer.bones, Has.Length.EqualTo(2));
+            Assert.That(renderer.bones, Has.Length.EqualTo(3));
             Assert.That(renderer.sharedMesh.boneWeights, Has.Length.EqualTo(3));
             Assert.That(root.transform.localScale, Is.EqualTo(Vector3.one));
             Assert.That(renderer.sharedMesh.bounds.size.x, Is.EqualTo(1f / 16f).Within(0.000001f));
-            Assert.That(renderer.sharedMesh.boneWeights.All(weight =>
-                weight.boneIndex0 == 0 && Mathf.Approximately(weight.weight0, 1f)), Is.True);
+            BoneWeight[] weights = renderer.sharedMesh.boneWeights;
+            Assert.That(weights[0].boneIndex0, Is.EqualTo(0));
+            Assert.That(weights[0].weight0, Is.EqualTo(1f).Within(0.000001f));
+            Assert.That(weights[1].boneIndex0, Is.EqualTo(1));
+            Assert.That(weights[1].weight0, Is.EqualTo(1f).Within(0.000001f));
+            Assert.That(weights[2].boneIndex0, Is.EqualTo(1));
+            Assert.That(weights[2].weight0, Is.EqualTo(0.75f).Within(0.000001f));
+            Assert.That(weights[2].boneIndex1, Is.EqualTo(0));
+            Assert.That(weights[2].weight1, Is.EqualTo(0.25f).Within(0.000001f));
         }
 
         private static string LocalIdSnapshot()

@@ -131,7 +131,8 @@ namespace MartinCalander.BlockbenchImporter.Builders
             byte[] imageData = null;
 
             // Try to decode embedded base64 data
-            if (!string.IsNullOrEmpty(texDef.source) && texDef.source.StartsWith("data:image"))
+            if (!string.IsNullOrEmpty(texDef.source) &&
+                texDef.source.StartsWith("data:image", StringComparison.Ordinal))
             {
                 imageData = DecodeBase64Image(texDef.source);
             }
@@ -156,13 +157,13 @@ namespace MartinCalander.BlockbenchImporter.Builders
             if (!texture.LoadImage(imageData))
             {
                 Debug.LogError($"Failed to decode image data for texture: {texture.name}");
+                UnityEngine.Object.DestroyImmediate(texture);
                 return null;
             }
 
             // Apply pixel art settings
             texture.filterMode = settings.textureFilter;
             texture.wrapMode = settings.textureWrap;
-            texture.Apply(false, false); // Don't make read-only so we can check alpha
 
             return texture;
         }

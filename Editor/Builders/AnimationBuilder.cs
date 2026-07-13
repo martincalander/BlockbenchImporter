@@ -257,13 +257,21 @@ namespace MartinCalander.BlockbenchImporter.Builders
             for (int frame = 1; frame < Mathf.CeilToInt(duration * sampleRate); frame++)
                 sampleTimes.Add(frame / (float)sampleRate);
 
+            bool convertGlobalRotation = false;
+            Quaternion parentInverse = Quaternion.identity;
+            if (animator.rotation_global && uuidToTransform.TryGetValue(nodeUuid, out Transform target) &&
+                target.parent != null)
+            {
+                convertGlobalRotation = true;
+                parentInverse = Quaternion.Inverse(target.parent.rotation);
+            }
+
             foreach (float time in sampleTimes)
             {
                 Quaternion finalQuat = EvaluateRotation(keyframes, time, restRotation,
                     animator.quaternion_interpolation);
-                if (animator.rotation_global && uuidToTransform.TryGetValue(nodeUuid, out Transform target) &&
-                    target.parent != null)
-                    finalQuat = Quaternion.Inverse(target.parent.rotation) * finalQuat;
+                if (convertGlobalRotation)
+                    finalQuat = parentInverse * finalQuat;
                 if (Quaternion.Dot(prevQuat, finalQuat) < 0)
                     finalQuat = new Quaternion(-finalQuat.x, -finalQuat.y, -finalQuat.z, -finalQuat.w);
                 prevQuat = finalQuat;

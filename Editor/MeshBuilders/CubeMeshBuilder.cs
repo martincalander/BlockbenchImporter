@@ -89,8 +89,11 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
 
                 // Use -1 as "no texture" material slot, map to index 0 for submesh if no textures
                 int submeshKey = textureIndex < 0 ? -1 - Mathf.Abs(element.color % 10) : textureIndex;
-                if (!trianglesByTexture.ContainsKey(submeshKey))
-                    trianglesByTexture[submeshKey] = new List<int>();
+                if (!trianglesByTexture.TryGetValue(submeshKey, out List<int> tris))
+                {
+                    tris = new List<int>(6);
+                    trianglesByTexture[submeshKey] = tris;
+                }
 
                 Vector3 normal = CoordinateConverter.GetFaceNormal(faceName);
                 int[] cornerIndices = CoordinateConverter.GetFaceCornerIndices(faceName);
@@ -133,7 +136,6 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                     uvsList.Add(baseUvs[rotatedIndex]);
                 }
 
-                var tris = trianglesByTexture[submeshKey];
                 bool reverse = Vector3.Dot(Vector3.Cross(verticesList[baseVertex + 1] - verticesList[baseVertex],
                     verticesList[baseVertex + 2] - verticesList[baseVertex]), normal) < 0f;
                 AddQuad(tris, baseVertex, reverse);
@@ -148,9 +150,9 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             // Use UInt32 index format to match glTF export
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 
-            mesh.vertices = verticesList.ToArray();
-            mesh.normals = normalsList.ToArray();
-            mesh.uv = uvsList.ToArray();
+            mesh.SetVertices(verticesList);
+            mesh.SetNormals(normalsList);
+            mesh.SetUVs(0, uvsList);
 
             // Build submeshes
             var sortedTextureIndices = new List<int>(trianglesByTexture.Keys);
@@ -162,7 +164,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             for (int i = 0; i < sortedTextureIndices.Count; i++)
             {
                 int texIdx = sortedTextureIndices[i];
-                mesh.SetTriangles(trianglesByTexture[texIdx].ToArray(), i);
+                mesh.SetTriangles(trianglesByTexture[texIdx], i, false);
                 result.textureIndices[i] = texIdx;
             }
 
@@ -195,7 +197,6 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             if (meshResults.Count == 1)
                 return meshResults[0];
 
-            var combineInstances = new List<CombineInstance>();
             var allTextureIndices = new HashSet<int>();
 
             // Collect all unique texture indices
