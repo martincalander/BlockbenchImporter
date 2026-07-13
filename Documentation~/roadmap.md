@@ -15,4 +15,4 @@ Some things are deliberately out of scope:
 - guessing silently when an element is unknown;
 - requiring a hosted service to use imported models.
 
-If you want to work on one of these areas, open an issue and read [CONTRIBUTING.md](https://github.com/martincalander/com.martincalander.blockbenchimporter/blob/main/.github/CONTRIBUTING.md).
+If you want to work on one of these areas, open an issue and read [CONTRIBUTING.md](https://github.com/martincalander/BlockbenchImporter/blob/main/.github/CONTRIBUTING.md).

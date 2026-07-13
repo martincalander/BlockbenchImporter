@@ -2,7 +2,7 @@
 
 Please report security problems privately, not in a public issue.
 
-Use [GitHub private vulnerability reporting](https://github.com/martincalander/com.martincalander.blockbenchimporter/security/advisories/new). If that is unavailable, email `martin.calander@gmail.com` with the subject `com.martincalander.blockbenchimporter security report`.
+Use [GitHub private vulnerability reporting](https://github.com/martincalander/BlockbenchImporter/security/advisories/new). If that is unavailable, email `martin.calander@gmail.com` with the subject `com.martincalander.blockbenchimporter security report`.
 
 Include the affected package and Unity versions, what an attacker needs to do, the likely impact, and a small proof of concept if it is safe to share. Please say if you plan to publish the report later.
 

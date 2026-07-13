@@ -5,13 +5,13 @@
   "description": "Drag-and-drop Blockbench project importer with faithful Unity hierarchy, geometry, textures, materials, armatures, animations, and Animator generation.",
   "unity": "2021.3",
   "unityRelease": "0b1",
-  "documentationUrl": "https://github.com/martincalander/com.martincalander.blockbenchimporter/blob/main/Documentation~/index.md",
-  "changelogUrl": "https://github.com/martincalander/com.martincalander.blockbenchimporter/blob/main/CHANGELOG.md",
-  "licensesUrl": "https://github.com/martincalander/com.martincalander.blockbenchimporter/blob/main/LICENSE.md",
+  "documentationUrl": "https://github.com/martincalander/BlockbenchImporter/blob/main/Documentation~/index.md",
+  "changelogUrl": "https://github.com/martincalander/BlockbenchImporter/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/martincalander/BlockbenchImporter/blob/main/LICENSE.md",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/martincalander/com.martincalander.blockbenchimporter.git"
+    "url": "https://github.com/martincalander/BlockbenchImporter.git"
   },
   "keywords": [
     "blockbench",

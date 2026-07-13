@@ -20,4 +20,4 @@ Other useful pages:
 - Minimum Unity version: `2021.3`
 - Maintainer: [Martin Calander](https://martincalander.com)
 
-Found a bug? [Open an issue](https://github.com/martincalander/com.martincalander.blockbenchimporter/issues).
+Found a bug? [Open an issue](https://github.com/martincalander/BlockbenchImporter/issues).

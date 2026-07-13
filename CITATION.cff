@@ -5,8 +5,8 @@ type: software
 authors:
   - family-names: "Calander"
     given-names: "Martin"
-url: "https://github.com/martincalander/com.martincalander.blockbenchimporter"
-repository-code: "https://github.com/martincalander/com.martincalander.blockbenchimporter"
+url: "https://github.com/martincalander/BlockbenchImporter"
+repository-code: "https://github.com/martincalander/BlockbenchImporter"
 license: "Apache-2.0"
 version: "1.0.0"
 date-released: 2026-07-12

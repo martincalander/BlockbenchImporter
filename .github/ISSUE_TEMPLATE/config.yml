@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Usage questions and ideas
-    url: https://github.com/martincalander/com.martincalander.blockbenchimporter/discussions
+    url: https://github.com/martincalander/BlockbenchImporter/discussions
     about: Ask for help or discuss an idea before filing an issue.
   - name: Private security report
-    url: https://github.com/martincalander/com.martincalander.blockbenchimporter/security/advisories/new
+    url: https://github.com/martincalander/BlockbenchImporter/security/advisories/new
     about: Report a suspected vulnerability privately.

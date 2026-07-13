@@ -33,4 +33,4 @@ When adding a field or element type:
 4. Add a geometry or import test.
 5. Update [format support](format-support.md) and the [changelog](../CHANGELOG.md).
 
-The rest of the development setup is in [CONTRIBUTING.md](https://github.com/martincalander/com.martincalander.blockbenchimporter/blob/main/.github/CONTRIBUTING.md).
+The rest of the development setup is in [CONTRIBUTING.md](https://github.com/martincalander/BlockbenchImporter/blob/main/.github/CONTRIBUTING.md).

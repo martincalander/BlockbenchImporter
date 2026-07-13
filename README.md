@@ -10,7 +10,7 @@
   <h1>Unity Blockbench Importer</h1>
   <p>Drop a <code>.bbmodel</code> into Unity and use it like any other asset.</p>
 
-[![Validation](https://github.com/martincalander/com.martincalander.blockbenchimporter/actions/workflows/validate.yml/badge.svg)](https://github.com/martincalander/com.martincalander.blockbenchimporter/actions/workflows/validate.yml)
+[![Validation](https://github.com/martincalander/BlockbenchImporter/actions/workflows/validate.yml/badge.svg)](https://github.com/martincalander/BlockbenchImporter/actions/workflows/validate.yml)
 [![Unity 2021.3+](https://img.shields.io/badge/Unity-2021.3%2B-222?logo=unity)](https://unity.com/releases/editor/whats-new/2021.3.0)
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-6f8df4)](LICENSE.md)
 </div>
@@ -38,7 +38,7 @@ The full list is in [format support](Documentation~/format-support.md).
 In Unity, open **Window → Package Manager**, choose **+ → Add package from git URL…**, and paste:
 
 ```text
-https://github.com/martincalander/com.martincalander.blockbenchimporter.git
+https://github.com/martincalander/BlockbenchImporter.git
 ```
 
 Or add it to `Packages/manifest.json`:
@@ -46,7 +46,7 @@ Or add it to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.martincalander.blockbenchimporter": "https://github.com/martincalander/com.martincalander.blockbenchimporter.git"
+    "com.martincalander.blockbenchimporter": "https://github.com/martincalander/BlockbenchImporter.git"
   }
 }
 ```
@@ -85,7 +85,7 @@ Blockbench plugins can add their own element types and expressions. This importe
 
 Texture meshes, splines, PBR texture packing, and animated texture playback still need dedicated implementations. Custom shaders and render-pipeline lighting can also make the Unity result look different from the Blockbench viewport.
 
-If a supported feature imports incorrectly, that is a bug. Please [report it](https://github.com/martincalander/com.martincalander.blockbenchimporter/issues/new/choose) with the smallest model that shows the problem.
+If a supported feature imports incorrectly, that is a bug. Please [report it](https://github.com/martincalander/BlockbenchImporter/issues/new/choose) with the smallest model that shows the problem.
 
 ## Docs
 
@@ -99,7 +99,7 @@ If a supported feature imports incorrectly, that is a bug. Please [report it](ht
 
 ## Contributing
 
-Bug fixes, tests, docs, and new format support are welcome. Start with [CONTRIBUTING.md](https://github.com/martincalander/com.martincalander.blockbenchimporter/blob/main/.github/CONTRIBUTING.md). Import changes should come with a small regression test or a model that is safe to redistribute.
+Bug fixes, tests, docs, and new format support are welcome. Start with [CONTRIBUTING.md](https://github.com/martincalander/BlockbenchImporter/blob/main/.github/CONTRIBUTING.md). Import changes should come with a small regression test or a model that is safe to redistribute.
 
 ## License
 
