@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Essentials.BlockbenchImporter.Samples.PostImportCustomization
+namespace MartinCalander.BlockbenchImporter.Samples.PostImportCustomization
 {
     /// <summary>Example runtime data added to an imported Blockbench root by the sample postprocessor.</summary>
     [DisallowMultipleComponent]

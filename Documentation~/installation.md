@@ -7,7 +7,7 @@ You need Unity `2021.3` or newer and Git installed on the same machine.
 Open **Window → Package Manager**, click **+ → Add package from git URL…**, and enter:
 
 ```text
-https://github.com/martincalander/UnityBlockbenchImporter.git
+https://github.com/martincalander/com.martincalander.blockbenchimporter.git
 ```
 
 There is no published version tag yet, so this URL currently follows `main`. After tagged releases begin, append `#vX.Y.Z` to pin a version.
@@ -17,7 +17,7 @@ There is no published version tag yet, so this URL currently follows `main`. Aft
 You can also edit `Packages/manifest.json` directly:
 
 ```json
-"com.essentials.blockbenchimporter": "https://github.com/martincalander/UnityBlockbenchImporter.git"
+"com.martincalander.blockbenchimporter": "https://github.com/martincalander/com.martincalander.blockbenchimporter.git"
 ```
 
 Remember the comma between entries. Commit both `manifest.json` and `packages-lock.json`.

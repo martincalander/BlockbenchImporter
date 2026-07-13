@@ -1,11 +1,11 @@
 using System.Collections.Generic;
-using Essentials.BlockbenchImporter.MeshBuilders;
-using Essentials.BlockbenchImporter.Model;
-using Essentials.BlockbenchImporter.Utils;
+using MartinCalander.BlockbenchImporter.MeshBuilders;
+using MartinCalander.BlockbenchImporter.Model;
+using MartinCalander.BlockbenchImporter.Utils;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace Essentials.BlockbenchImporter.Tests
+namespace MartinCalander.BlockbenchImporter.Tests
 {
     public sealed class BlockbenchGeometryTests
     {

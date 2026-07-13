@@ -5,8 +5,8 @@ type: software
 authors:
   - family-names: "Calander"
     given-names: "Martin"
-url: "https://github.com/martincalander/UnityBlockbenchImporter"
-repository-code: "https://github.com/martincalander/UnityBlockbenchImporter"
+url: "https://github.com/martincalander/com.martincalander.blockbenchimporter"
+repository-code: "https://github.com/martincalander/com.martincalander.blockbenchimporter"
 license: "Apache-2.0"
 version: "1.0.0"
 date-released: 2026-07-12

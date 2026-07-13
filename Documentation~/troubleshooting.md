@@ -39,4 +39,4 @@ The importer does not run expressions from asset files. Bake expression-driven a
 
 ## Still stuck?
 
-Search the [issues](https://github.com/martincalander/UnityBlockbenchImporter/issues), then open a bug report. A tiny model you can legally share, the relevant Console lines, and matching Blockbench/Unity screenshots are ideal.
+Search the [issues](https://github.com/martincalander/com.martincalander.blockbenchimporter/issues), then open a bug report. A tiny model you can legally share, the relevant Console lines, and matching Blockbench/Unity screenshots are ideal.

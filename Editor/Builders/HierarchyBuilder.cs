@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Essentials.BlockbenchImporter.MeshBuilders;
-using Essentials.BlockbenchImporter.Model;
-using Essentials.BlockbenchImporter.Parsing;
-using Essentials.BlockbenchImporter.Utils;
+using MartinCalander.BlockbenchImporter.MeshBuilders;
+using MartinCalander.BlockbenchImporter.Model;
+using MartinCalander.BlockbenchImporter.Parsing;
+using MartinCalander.BlockbenchImporter.Utils;
 using UnityEngine;
 
-namespace Essentials.BlockbenchImporter.Builders
+namespace MartinCalander.BlockbenchImporter.Builders
 {
     internal sealed class HierarchyBuilder
     {

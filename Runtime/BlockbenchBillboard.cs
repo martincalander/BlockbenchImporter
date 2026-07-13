@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Essentials.BlockbenchImporter
+namespace MartinCalander.BlockbenchImporter
 {
     [ExecuteAlways, DisallowMultipleComponent]
     public sealed class BlockbenchBillboard : MonoBehaviour

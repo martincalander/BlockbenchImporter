@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using Essentials.BlockbenchImporter.Model;
+using MartinCalander.BlockbenchImporter.Model;
 using UnityEngine;
 
-namespace Essentials.BlockbenchImporter.MeshBuilders
+namespace MartinCalander.BlockbenchImporter.MeshBuilders
 {
     internal static class BillboardMeshBuilder
     {

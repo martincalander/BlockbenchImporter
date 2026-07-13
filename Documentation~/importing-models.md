@@ -50,7 +50,7 @@ When reporting a visual bug, a Blockbench screenshot and a very small model are 
 
 ```csharp
 using System.Collections.Generic;
-using Essentials.BlockbenchImporter;
+using MartinCalander.BlockbenchImporter;
 using UnityEditor;
 using UnityEngine;
 

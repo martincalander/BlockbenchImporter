@@ -6,7 +6,9 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 
 ### Changed
 
-- Replaced the README banner and checkmark mark with the Blockbench bench motif in Unity's black-and-white palette.
+- Renamed the package ID from `com.essentials.blockbenchimporter` to `com.martincalander.blockbenchimporter`, and moved public namespaces and assembly names from `Essentials.BlockbenchImporter` to `MartinCalander.BlockbenchImporter`.
+- Replaced custom README artwork with the standard Blockbench and Unity logos.
+- Replaced the root package icon with Blockbench's standard application icon.
 - Rewrote the public and UPM documentation in a shorter, more direct maintainer voice.
 - Moved GitHub community files under `.github/` and package guidance under `Documentation~/` so Unity ignores them.
 - Moved governance, maintainer, and release-process documents under `.github/`.
@@ -32,7 +34,7 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 
 ### Changed
 
-- Renamed public namespaces and the assembly root namespace to `Essentials.BlockbenchImporter`.
+- Renamed public namespaces and the assembly root namespace to `MartinCalander.BlockbenchImporter`.
 - Replaced the former proprietary terms with the Apache License 2.0 and a retained attribution notice for Martin Calander.
 - Unknown or plugin-defined element types now remain visible as transforms and produce contextual warnings instead of being silently discarded.
 
@@ -48,6 +50,6 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 
 - Initial `.bbmodel` Scripted Importer with hierarchy, cube and mesh elements, embedded textures, materials, and basic animation generation.
 
-[Unreleased]: https://github.com/martincalander/UnityBlockbenchImporter/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/martincalander/UnityBlockbenchImporter/releases/tag/v1.0.0
-[0.1.0]: https://github.com/martincalander/UnityBlockbenchImporter/releases/tag/v0.1.0
+[Unreleased]: https://github.com/martincalander/com.martincalander.blockbenchimporter/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/martincalander/com.martincalander.blockbenchimporter/releases/tag/v1.0.0
+[0.1.0]: https://github.com/martincalander/com.martincalander.blockbenchimporter/releases/tag/v0.1.0

@@ -1,8 +1,8 @@
 # Getting help
 
-Start with the [manual](../Documentation~/index.md) and [troubleshooting page](../Documentation~/troubleshooting.md). It is also worth searching the [issue tracker](https://github.com/martincalander/UnityBlockbenchImporter/issues); someone may already have hit the same problem.
+Start with the [manual](../Documentation~/index.md) and [troubleshooting page](../Documentation~/troubleshooting.md). It is also worth searching the [issue tracker](https://github.com/martincalander/com.martincalander.blockbenchimporter/issues); someone may already have hit the same problem.
 
-For a question, use [GitHub Discussions](https://github.com/martincalander/UnityBlockbenchImporter/discussions) if it is enabled. For a reproducible importer bug, open an issue.
+For a question, use [GitHub Discussions](https://github.com/martincalander/com.martincalander.blockbenchimporter/discussions) if it is enabled. For a reproducible importer bug, open an issue.
 
 Please include:
 

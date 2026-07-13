@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Essentials.BlockbenchImporter.Model
+namespace MartinCalander.BlockbenchImporter.Model
 {
     /// <summary>
     /// Root model representing a parsed .bbmodel file.

@@ -1,8 +1,8 @@
 {
-    "name": "Essentials.BlockbenchImporter",
-    "rootNamespace": "Essentials.BlockbenchImporter",
+    "name": "MartinCalander.BlockbenchImporter",
+    "rootNamespace": "MartinCalander.BlockbenchImporter",
     "references": [
-        "Essentials.BlockbenchImporter.Runtime"
+        "MartinCalander.BlockbenchImporter.Runtime"
     ],
     "includePlatforms": [
         "Editor"

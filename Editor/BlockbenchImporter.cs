@@ -1,16 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Essentials.BlockbenchImporter.Builders;
-using Essentials.BlockbenchImporter.Model;
-using Essentials.BlockbenchImporter.Parsing;
-using Essentials.BlockbenchImporter.Utils;
+using MartinCalander.BlockbenchImporter.Builders;
+using MartinCalander.BlockbenchImporter.Model;
+using MartinCalander.BlockbenchImporter.Parsing;
+using MartinCalander.BlockbenchImporter.Utils;
 using UnityEditor;
 using UnityEditor.AssetImporters;
 using UnityEngine;
 using UnityEngine.Serialization;
 
-namespace Essentials.BlockbenchImporter
+namespace MartinCalander.BlockbenchImporter
 {
     [ScriptedImporter(20, "bbmodel")]
     public sealed class BlockbenchImporter : ScriptedImporter

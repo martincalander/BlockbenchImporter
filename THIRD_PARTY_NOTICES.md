@@ -1,7 +1,9 @@
 # Third-party notices
 
-The package does not currently ship third-party code, binaries, fonts, or model assets.
+## Blockbench application icon
 
-Unity and Blockbench are named only to explain what the importer works with. Their names and marks belong to their owners; no endorsement is implied.
+`Icon.png` is the unmodified Blockbench application icon from the [Blockbench repository](https://github.com/JannisX11/blockbench/blob/master/icon.png). Blockbench is distributed under the [GNU General Public License v3.0](https://github.com/JannisX11/blockbench/blob/master/LICENSE.MD).
 
-If a dependency or asset is bundled later, its license and required credit belong in this file before release.
+The icon and Blockbench name belong to their respective owner and contributors. They are used only to identify the file format supported by this independent importer; no endorsement is implied.
+
+Unity and the Unity logo belong to Unity Technologies. They are referenced only to identify the supported engine; no endorsement is implied.

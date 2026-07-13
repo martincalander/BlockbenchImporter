@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Essentials.BlockbenchImporter.Utils
+namespace MartinCalander.BlockbenchImporter.Utils
 {
     /// <summary>
     /// Coordinate system conversion utilities for Blockbench to Unity.

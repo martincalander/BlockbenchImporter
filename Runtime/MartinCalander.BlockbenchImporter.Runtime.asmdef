@@ -1,0 +1,6 @@
+{
+  "name": "MartinCalander.BlockbenchImporter.Runtime",
+  "rootNamespace": "MartinCalander.BlockbenchImporter",
+  "references": [],
+  "autoReferenced": true
+}

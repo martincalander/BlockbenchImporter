@@ -16,8 +16,8 @@ Other useful pages:
 - [Changelog](../CHANGELOG.md)
 - **Post-Import Customization sample** — import it from the package's Samples tab in Unity Package Manager
 
-- Package ID: `com.essentials.blockbenchimporter`
+- Package ID: `com.martincalander.blockbenchimporter`
 - Minimum Unity version: `2021.3`
 - Maintainer: [Martin Calander](https://martincalander.com)
 
-Found a bug? [Open an issue](https://github.com/martincalander/UnityBlockbenchImporter/issues).
+Found a bug? [Open an issue](https://github.com/martincalander/com.martincalander.blockbenchimporter/issues).

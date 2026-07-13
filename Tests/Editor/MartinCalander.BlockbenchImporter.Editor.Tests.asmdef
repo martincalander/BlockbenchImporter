@@ -1,0 +1,13 @@
+{
+  "name": "MartinCalander.BlockbenchImporter.Editor.Tests",
+  "rootNamespace": "MartinCalander.BlockbenchImporter.Tests",
+  "references": [
+    "MartinCalander.BlockbenchImporter"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

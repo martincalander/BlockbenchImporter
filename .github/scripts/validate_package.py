@@ -29,7 +29,7 @@ def load_json(path: Path) -> dict:
 def validate_manifest() -> None:
     manifest = load_json(ROOT / "package.json")
     expected = {
-        "name": "com.essentials.blockbenchimporter",
+        "name": "com.martincalander.blockbenchimporter",
         "displayName": "Blockbench Importer",
         "license": "Apache-2.0",
     }

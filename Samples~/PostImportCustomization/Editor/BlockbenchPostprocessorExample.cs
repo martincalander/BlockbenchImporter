@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Essentials.BlockbenchImporter.Samples.PostImportCustomization;
+using MartinCalander.BlockbenchImporter.Samples.PostImportCustomization;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace Essentials.BlockbenchImporter.Samples.PostImportCustomization.Editor
+namespace MartinCalander.BlockbenchImporter.Samples.PostImportCustomization.Editor
 {
     /// <summary>
     /// Demonstrates opt-in, deterministic customization of generated Blockbench assets.

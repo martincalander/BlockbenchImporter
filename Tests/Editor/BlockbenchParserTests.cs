@@ -1,7 +1,7 @@
-using Essentials.BlockbenchImporter.Parsing;
+using MartinCalander.BlockbenchImporter.Parsing;
 using NUnit.Framework;
 
-namespace Essentials.BlockbenchImporter.Tests
+namespace MartinCalander.BlockbenchImporter.Tests
 {
     public sealed class BlockbenchParserTests
     {

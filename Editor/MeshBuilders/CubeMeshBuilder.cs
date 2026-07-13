@@ -1,9 +1,9 @@
 using System.Collections.Generic;
-using Essentials.BlockbenchImporter.Model;
-using Essentials.BlockbenchImporter.Utils;
+using MartinCalander.BlockbenchImporter.Model;
+using MartinCalander.BlockbenchImporter.Utils;
 using UnityEngine;
 
-namespace Essentials.BlockbenchImporter.MeshBuilders
+namespace MartinCalander.BlockbenchImporter.MeshBuilders
 {
     /// <summary>
     /// Builds Unity Mesh objects from Blockbench cube elements.

@@ -1,14 +1,14 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Essentials.BlockbenchImporter.Utils;
+using MartinCalander.BlockbenchImporter.Utils;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.AssetImporters;
 using UnityEditor.Animations;
 using UnityEngine;
 
-namespace Essentials.BlockbenchImporter.Tests
+namespace MartinCalander.BlockbenchImporter.Tests
 {
     public sealed class BlockbenchImporterIntegrationTests
     {

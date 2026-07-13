@@ -38,7 +38,7 @@ jobs:
       - name: Build UPM archive and checksum
         shell: bash
         run: |
-          package="com.essentials.blockbenchimporter"
+          package="com.martincalander.blockbenchimporter"
           version="${{ steps.version.outputs.version }}"
           archive="${package}-${version}.tgz"
           mkdir -p "dist/${package}"
@@ -55,7 +55,7 @@ jobs:
         run: |
           version="${{ steps.version.outputs.version }}"
           tag="${{ steps.version.outputs.tag }}"
-          archive="com.essentials.blockbenchimporter-${version}.tgz"
+          archive="com.martincalander.blockbenchimporter-${version}.tgz"
           gh release create "${tag}" "${archive}" "${archive}.sha256" \
             --verify-tag \
             --generate-notes \
