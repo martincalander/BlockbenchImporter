@@ -7,7 +7,7 @@
       <img src="https://cdn.simpleicons.org/unity/000000" alt="Unity" width="88" height="88">
     </picture>
   </p>
-  <h1>Unity Blockbench Importer</h1>
+  <h1>Blockbench Importer for Unity</h1>
   <p>Drop a <code>.bbmodel</code> into Unity and use it like any other asset.</p>
 
 [![Validation](https://github.com/martincalander/BlockbenchImporter/actions/workflows/validate.yml/badge.svg)](https://github.com/martincalander/BlockbenchImporter/actions/workflows/validate.yml)
