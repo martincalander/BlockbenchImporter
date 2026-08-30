@@ -15,6 +15,10 @@
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-6f8df4)](LICENSE.md)
 </div>
 
+> [!WARNING]
+> **Under development.** This package has not been publicly released yet and
+> may change without notice.
+
 The importer reads the Blockbench project directly. There is no separate export step: edit the model in Blockbench, save it, and Unity reimports it.
 
 The result is one prefab-like asset with its hierarchy, meshes, textures, materials, animation clips, and optional Animator Controller stored as sub-assets.
