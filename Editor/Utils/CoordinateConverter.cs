@@ -13,10 +13,8 @@ namespace MartinCalander.BlockbenchImporter.Utils
     /// Unity coordinate system:
     /// - X = right, Y = up, Z = forward
     ///
-    /// The conversion matches Blockbench's glTF export which:
-    /// - Uses a default export scale of 16 Blockbench units per meter
-    /// - Keeps the same axis orientation (no Z flip)
-    /// - Model naturally faces -Z (away from camera in Unity's default view)
+    /// The conversion mirrors X to change handedness and uses the default
+    /// glTF export scale of 16 Blockbench units per meter.
     /// </summary>
     public static class CoordinateConverter
     {
@@ -32,11 +30,10 @@ namespace MartinCalander.BlockbenchImporter.Utils
 
         /// <summary>
         /// Convert a position from Blockbench to Unity coordinate system.
-        /// Applies scale and X-axis negation (matching glTF export).
+        /// Applies scale and X-axis negation.
         /// </summary>
         public static Vector3 ConvertPosition(float x, float y, float z)
         {
-            // Match Blockbench glTF export: divide by 16, negate X axis
             return ConvertPosition(x, y, z, DefaultImportScale);
         }
 
@@ -58,11 +55,10 @@ namespace MartinCalander.BlockbenchImporter.Utils
 
         /// <summary>
         /// Convert a raw position without scale (for relative offsets within elements).
-        /// Applies X-axis negation to match glTF export.
+        /// Applies X-axis negation to change handedness.
         /// </summary>
         public static Vector3 ConvertPositionRaw(float x, float y, float z)
         {
-            // Negate X to match glTF export coordinate system
             return new Vector3(-x, y, z);
         }
 
@@ -75,16 +71,16 @@ namespace MartinCalander.BlockbenchImporter.Utils
 
         /// <summary>
         /// Convert a direction/normal vector from Blockbench to Unity.
-        /// No axis changes needed - same orientation.
+        /// Reflect directions with the same X-axis conversion as positions.
         /// </summary>
         public static Vector3 ConvertDirection(Vector3 dir)
         {
-            return dir;
+            return new Vector3(-dir.x, dir.y, dir.z);
         }
 
         /// <summary>
         /// Convert Blockbench Euler angles (degrees) to Unity Quaternion.
-        /// Blockbench uses the same Y-up orientation, just apply directly.
+        /// Built-in Blockbench formats use ZYX Euler order.
         /// </summary>
         public static Quaternion ConvertRotation(float[] eulerDegrees)
         {
@@ -100,12 +96,12 @@ namespace MartinCalander.BlockbenchImporter.Utils
         /// </summary>
         public static Quaternion ConvertRotation(float xDeg, float yDeg, float zDeg)
         {
-            // Blockbench/Three.js uses XYZ Euler order. Quaternion.Euler uses Unity's
-            // ZXY order, so compose the axes explicitly. Mirroring X changes the
-            // handedness and therefore negates rotations around Y and Z.
-            return Quaternion.AngleAxis(xDeg, Vector3.right) *
-                   Quaternion.AngleAxis(-yDeg, Vector3.up) *
-                   Quaternion.AngleAxis(-zDeg, Vector3.forward);
+            // Blockbench's ModelFormat defaults to ZYX, unlike Unity's ZXY.
+            // Reflection negates rotations around Y and Z.
+            Quaternion x = Quaternion.AngleAxis(xDeg, Vector3.right);
+            Quaternion y = Quaternion.AngleAxis(-yDeg, Vector3.up);
+            Quaternion z = Quaternion.AngleAxis(-zDeg, Vector3.forward);
+            return z * y * x;
         }
 
         /// <summary>
@@ -138,14 +134,6 @@ namespace MartinCalander.BlockbenchImporter.Utils
         public static Vector3 ConvertScale(Vector3 bbScale)
         {
             return bbScale;
-        }
-
-        /// <summary>
-        /// Extract quaternion from a rotation matrix.
-        /// </summary>
-        private static Quaternion MatrixToQuaternion(Matrix4x4 m)
-        {
-            return m.rotation;
         }
 
         /// <summary>

@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,11 +8,17 @@ using UnityEditor;
 using UnityEditor.AssetImporters;
 using UnityEditor.Animations;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace MartinCalander.BlockbenchImporter.Tests
 {
     public sealed class BlockbenchImporterIntegrationTests
     {
+        private bool restorePlayModeSettings;
+        private bool previousPlayModeOptionsEnabled;
+        private EnterPlayModeOptions previousPlayModeOptions;
+        private readonly List<Camera> temporarilyUntaggedCameras = new List<Camera>();
+
         private const string Folder = "Assets/__BlockbenchImporterTests";
         private const string AssetPath = Folder + "/Integration.bbmodel";
         private const string ArmaturePath = Folder + "/Armature.bbmodel";
@@ -47,7 +54,91 @@ namespace MartinCalander.BlockbenchImporter.Tests
         }
 
         [TearDown]
-        public void TearDown() => AssetDatabase.DeleteAsset(Folder);
+        public void TearDown()
+        {
+            if (!restorePlayModeSettings)
+                AssetDatabase.DeleteAsset(Folder);
+        }
+
+        [UnityTearDown]
+        public IEnumerator RestorePlayModeSettings()
+        {
+            if (!restorePlayModeSettings)
+                yield break;
+
+            try
+            {
+                if (EditorApplication.isPlaying)
+                    yield return new ExitPlayMode();
+                RestoreMainCameraTags();
+            }
+            finally
+            {
+                BlockbenchImportHookTestPostprocessor.Reset();
+                EditorSettings.enterPlayModeOptionsEnabled = previousPlayModeOptionsEnabled;
+                EditorSettings.enterPlayModeOptions = previousPlayModeOptions;
+                restorePlayModeSettings = false;
+                AssetDatabase.DeleteAsset(Folder);
+            }
+        }
+
+        [UnityTest]
+        [Category("PlayModeLifecycle")]
+        public IEnumerator ReimportAndBillboardsSurviveTwoPlaySessionsWithoutDomainReload()
+        {
+            previousPlayModeOptionsEnabled = EditorSettings.enterPlayModeOptionsEnabled;
+            previousPlayModeOptions = EditorSettings.enterPlayModeOptions;
+            restorePlayModeSettings = true;
+            EditorSettings.enterPlayModeOptionsEnabled = true;
+            EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload;
+
+            int callbackCount = 0;
+            BlockbenchImportHookTestPostprocessor.PathToHandle = AssetPath;
+            BlockbenchImportHookTestPostprocessor.Callback = _ => callbackCount++;
+            string identifiers = LocalIdSnapshot();
+            Camera previousCamera = null;
+
+            for (int cycle = 0; cycle < 2; cycle++)
+            {
+                AssetDatabase.ImportAsset(AssetPath,
+                    ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+                Assert.That(callbackCount, Is.EqualTo(cycle + 1),
+                    "A reused importer must invoke its post-import callback once per import.");
+                Assert.That(LocalIdSnapshot(), Is.EqualTo(identifiers));
+
+                yield return new EnterPlayMode(false);
+                Assert.That(previousCamera == null, Is.True,
+                    "The previous Play session's camera must not survive scene reload.");
+
+                foreach (Camera existingCamera in Camera.allCameras)
+                {
+                    if (!existingCamera.CompareTag("MainCamera"))
+                        continue;
+                    temporarilyUntaggedCameras.Add(existingCamera);
+                    existingCamera.tag = "Untagged";
+                }
+
+                var cameraObject = new GameObject("Blockbench lifecycle camera");
+                Camera camera = cameraObject.AddComponent<Camera>();
+                cameraObject.tag = "MainCamera";
+                cameraObject.transform.rotation = Quaternion.Euler(15f, cycle == 0 ? 35f : 140f, 0f);
+
+                var billboardObject = new GameObject("Blockbench lifecycle billboard");
+                var billboard = billboardObject.AddComponent<BlockbenchBillboard>();
+                billboard.Mode = BlockbenchBillboard.FacingMode.CameraRotation;
+
+                yield return null;
+                yield return null;
+
+                Assert.That(Camera.main, Is.SameAs(camera));
+                Assert.That(Quaternion.Angle(billboard.transform.rotation, camera.transform.rotation),
+                    Is.LessThan(0.001f), "The billboard must use this Play session's camera.");
+                previousCamera = camera;
+                RestoreMainCameraTags();
+                yield return new ExitPlayMode();
+                Assert.That(LocalIdSnapshot(), Is.EqualTo(identifiers));
+            }
+        }
 
         [Test]
         public void Import_CreatesPrefabAndAllConfiguredSubAssets()
@@ -182,6 +273,72 @@ namespace MartinCalander.BlockbenchImporter.Tests
             Assert.That(weights[2].weight1, Is.EqualTo(0.25f).Within(0.000001f));
         }
 
+        [Test]
+        public void ArmatureWeightsRemainScopedToEachMeshAndSourceVertex()
+        {
+            const string model = @"{
+              ""meta"":{""format_version"":""5.0"",""model_format"":""free""},
+              ""name"":""Shared vertices"",
+              ""elements"":[
+                {""name"":""rig"",""type"":""armature"",""uuid"":""rig"",""children"":[""bone0"",""bone1"",""bone2"",""bone3"",""bone4"",""bone5"",""first001"",""second01""]},
+                {""name"":""bone0"",""type"":""armature_bone"",""uuid"":""bone0"",""vertex_weights"":{""a"":1,""first0:a"":0,""second:a"":9,""b"":-2,""c"":1}},
+                {""name"":""bone1"",""type"":""armature_bone"",""uuid"":""bone1"",""vertex_weights"":{""a"":2,""b"":0,""c"":1}},
+                {""name"":""bone2"",""type"":""armature_bone"",""uuid"":""bone2"",""vertex_weights"":{""a"":3}},
+                {""name"":""bone3"",""type"":""armature_bone"",""uuid"":""bone3"",""vertex_weights"":{""a"":4}},
+                {""name"":""bone4"",""type"":""armature_bone"",""uuid"":""bone4"",""vertex_weights"":{""a"":5}},
+                {""name"":""bone5"",""type"":""armature_bone"",""uuid"":""bone5"",""vertex_weights"":{""a"":6}},
+                {""name"":""first"",""type"":""mesh"",""uuid"":""first001"",
+                 ""vertices"":{""a"":[0,0,0],""b"":[1,0,0],""c"":[0,1,0],""d"":[1,1,0]},
+                 ""faces"":{""one"":{""vertices"":[""a"",""b"",""c""]},""two"":{""vertices"":[""a"",""c"",""d""]}}},
+                {""name"":""second"",""type"":""mesh"",""uuid"":""second01"",
+                 ""vertices"":{""a"":[0,0,0],""b"":[1,0,0],""c"":[0,1,0],""d"":[1,1,0]},
+                 ""faces"":{""one"":{""vertices"":[""a"",""b"",""c""]},""two"":{""vertices"":[""a"",""c"",""d""]}}}
+              ],
+              ""outliner"":[""rig""]
+            }";
+            File.WriteAllText(ArmaturePath, model);
+            AssetDatabase.ImportAsset(ArmaturePath,
+                ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            var root = AssetDatabase.LoadMainAssetAtPath(ArmaturePath) as GameObject;
+            var first = root.transform.Find("rig/first").GetComponent<SkinnedMeshRenderer>();
+            var second = root.transform.Find("rig/second").GetComponent<SkinnedMeshRenderer>();
+            Assert.That(first.bones, Has.Length.EqualTo(7));
+            Assert.That(second.bones, Has.Length.EqualTo(7));
+            BoneWeight[] firstWeights = first.sharedMesh.boneWeights;
+            BoneWeight[] secondWeights = second.sharedMesh.boneWeights;
+            Assert.That(firstWeights, Has.Length.EqualTo(6));
+            Assert.That(secondWeights, Has.Length.EqualTo(6));
+            Assert.That(firstWeights[0], Is.EqualTo(firstWeights[3]),
+                "Face copies of a source vertex must receive the same weights.");
+            Assert.That(secondWeights[0], Is.EqualTo(secondWeights[3]));
+            Assert.That(firstWeights[0].boneIndex0, Is.EqualTo(5));
+            Assert.That(firstWeights[0].boneIndex1, Is.EqualTo(4));
+            Assert.That(firstWeights[0].boneIndex2, Is.EqualTo(3));
+            Assert.That(firstWeights[0].boneIndex3, Is.EqualTo(2));
+            Assert.That(firstWeights[0].weight0, Is.EqualTo(6f / 18f).Within(0.000001f));
+            Assert.That(firstWeights[0].weight3, Is.EqualTo(3f / 18f).Within(0.000001f));
+            Assert.That(secondWeights[0].boneIndex0, Is.EqualTo(0),
+                "A second mesh with the same source IDs must use its own prefixed weights.");
+            Assert.That(secondWeights[0].boneIndex1, Is.EqualTo(5));
+            Assert.That(secondWeights[0].boneIndex2, Is.EqualTo(4));
+            Assert.That(secondWeights[0].boneIndex3, Is.EqualTo(3));
+            Assert.That(secondWeights[0].weight0, Is.EqualTo(9f / 24f).Within(0.000001f));
+            foreach (BoneWeight[] weights in new[] { firstWeights, secondWeights })
+            {
+                foreach (int index in new[] { 1, 5 })
+                {
+                    Assert.That(weights[index].boneIndex0, Is.EqualTo(6));
+                    Assert.That(weights[index].weight0, Is.EqualTo(1f),
+                        "Unweighted vertices must not inherit the previous vertex's influences.");
+                }
+                Assert.That(weights[2], Is.EqualTo(weights[4]));
+                Assert.That(weights[2].boneIndex0, Is.EqualTo(0));
+                Assert.That(weights[2].boneIndex1, Is.EqualTo(1));
+                Assert.That(weights[2].weight0, Is.EqualTo(0.5f));
+                Assert.That(weights[2].weight1, Is.EqualTo(0.5f));
+            }
+        }
+
         private static string LocalIdSnapshot()
         {
             return string.Join("|", AssetDatabase.LoadAllAssetsAtPath(AssetPath)
@@ -195,6 +352,16 @@ namespace MartinCalander.BlockbenchImporter.Tests
                 }));
         }
 
+        private void RestoreMainCameraTags()
+        {
+            foreach (Camera camera in temporarilyUntaggedCameras)
+            {
+                if (camera != null)
+                    camera.tag = "MainCamera";
+            }
+            temporarilyUntaggedCameras.Clear();
+        }
+
         private static float EvaluateCurve(AnimationClip clip, string property, float time)
         {
             EditorCurveBinding binding = AnimationUtility.GetCurveBindings(clip).Single(candidate =>
@@ -203,6 +370,10 @@ namespace MartinCalander.BlockbenchImporter.Tests
         }
     }
 
+#if UNITY_6000_5_OR_NEWER
+    // Tests own Reset() and keep this callback across Play mode transitions.
+    [Unity.Scripting.LifecycleManagement.NoAutoStaticsCleanup]
+#endif
     internal sealed class BlockbenchImportHookTestPostprocessor : AssetPostprocessor
     {
         internal static string PathToHandle;

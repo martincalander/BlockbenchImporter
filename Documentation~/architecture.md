@@ -10,6 +10,16 @@ The import is split into a few ordinary steps:
 
 Parsing and Unity object creation are kept apart on purpose. A format change should not require mesh-building code to understand raw JSON, and coordinate conversion should not be reimplemented in several places.
 
+## Import work and memory
+
+Position and scale curves retain separate incoming and outgoing tangents. Rotation curves are sampled with extra keys around discontinuities, and global rotations account for animated ancestors. The parser converts the older animation axes described in Blockbench's [format history](https://www.blockbench.net/wiki/docs/bbmodel/).
+
+Transparency checks scan every pixel and access readable RGBA32 data directly. Armature weights are calculated once for each source vertex in each mesh, then reused for copies created at face boundaries. These working caches belong to the current import.
+
+Groups use shared model pivots, while armature bones use parent-local origins. Coordinate conversion mirrors X and composes rotations in Blockbench's ZYX order. Polygon winding and normals are converted together.
+
+Animations only create a Unity clip when a supported transform channel has keyframes. Empty animations and unsupported tracks do not retain unused native clips.
+
 ## Asset safety
 
 The file is data, not code:
@@ -18,10 +28,21 @@ The file is data, not code:
 - Blockbench plugins and managed assemblies are not loaded.
 - The source `.bbmodel` is never rewritten.
 - Embedded textures are decoded in memory.
-- Missing external textures produce warnings.
+- External images take precedence over embedded snapshots, with embedded fallback when the external file is missing.
+- Missing texture data produces a warning. Project texture dependencies are registered even before the referenced file exists.
 - Unknown elements are kept as named transforms when that is useful.
 
 Please do not work around one model by weakening those rules.
+
+## Play mode lifecycle
+
+The importer has no mutable static session state or global event subscriptions. Its static face names and marker colors are fixed lookup data. Parsing, texture and material caches, hierarchy maps, and animation builders belong to each import.
+
+`OnPostBlockbenchImport` belongs to the importer instance. Register it idempotently from `OnPreprocessAsset`, as shown in the user guide, because Unity can reuse importer instances. Custom callbacks should avoid capturing scene objects or keeping global session state.
+
+`BlockbenchBillboard` has no cached camera or session state. It reads `Camera.main` during Play mode and `Camera.current` for Edit mode rendering. There is no package state that requires a Play mode reset callback, so disabling domain reload does not require an additional lifecycle hook.
+
+The `PlayModeLifecycle` EditMode test performs two Play sessions with domain reload disabled. It checks post-import callback counts, stable generated asset identifiers, and billboard orientation against a new camera in each session.
 
 ## Adding format support
 

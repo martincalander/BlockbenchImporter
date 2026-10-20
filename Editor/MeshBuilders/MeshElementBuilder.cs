@@ -48,6 +48,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             var trianglesByTexture = new Dictionary<int, List<int>>();
             var faceVerts = new List<Vector3>();
             var faceUvs = new List<Vector2>();
+            var faceVertexIds = new List<string>();
 
             foreach (var faceKvp in element.meshFaces)
             {
@@ -57,6 +58,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
 
                 faceVerts.Clear();
                 faceUvs.Clear();
+                faceVertexIds.Clear();
 
                 int textureIndex = face.texture;
                 int submeshKey = textureIndex < 0 ? -1 - Mathf.Abs(element.color % 10) : textureIndex;
@@ -80,7 +82,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                     if (vertexLookup.TryGetValue(vertId, out var pos))
                     {
                         faceVerts.Add(pos);
-                        sourceVertexIds.Add(vertId);
+                        faceVertexIds.Add(vertId);
 
                         // Get UV for this vertex
                         if (face.uv != null && face.uv.TryGetValue(vertId, out var uvCoords) && uvCoords.Length >= 2)
@@ -99,8 +101,9 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                 if (faceVerts.Count < 3)
                     continue;
 
-                // Calculate face normal
-                Vector3 normal = CalculateFaceNormal(faceVerts);
+                // A reflection reverses the cross product's orientation. Negate
+                // it to preserve the source face's outward-facing normal.
+                Vector3 normal = -CalculateFaceNormal(faceVerts);
 
                 // Triangulate the face
                 var triangles = EarClipTriangulate(faceVerts, normal);
@@ -115,6 +118,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                     normalsList.Add(normal);
                     uvsList.Add(faceUvs[i]);
                 }
+                sourceVertexIds.AddRange(faceVertexIds);
 
                 foreach (var triIdx in triangles)
                 {
@@ -202,49 +206,6 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                 triangles[index + 1] = triangles[index + 2];
                 triangles[index + 2] = swap;
             }
-        }
-
-        /// <summary>
-        /// Simple triangulation for convex polygons.
-        /// Winding is reversed to compensate for X-axis negation.
-        /// </summary>
-        private static List<int> TriangulateFace(List<Vector3> vertices, Vector3 normal)
-        {
-            var triangles = new List<int>();
-
-            if (vertices.Count < 3)
-                return triangles;
-
-            if (vertices.Count == 3)
-            {
-                // Single triangle (reversed winding)
-                triangles.Add(0);
-                triangles.Add(2);
-                triangles.Add(1);
-                return triangles;
-            }
-
-            if (vertices.Count == 4)
-            {
-                // Quad - split into two triangles (reversed winding)
-                triangles.Add(0);
-                triangles.Add(2);
-                triangles.Add(1);
-                triangles.Add(0);
-                triangles.Add(3);
-                triangles.Add(2);
-                return triangles;
-            }
-
-            // Fan triangulation for convex polygons (reversed winding)
-            for (int i = 1; i < vertices.Count - 1; i++)
-            {
-                triangles.Add(0);
-                triangles.Add(i + 1);
-                triangles.Add(i);
-            }
-
-            return triangles;
         }
 
         /// <summary>

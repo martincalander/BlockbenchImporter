@@ -130,19 +130,15 @@ namespace MartinCalander.BlockbenchImporter.Builders
         {
             byte[] imageData = null;
 
-            // Try to decode embedded base64 data
-            if (!string.IsNullOrEmpty(texDef.source) &&
+            // Blockbench prefers a current external image over the embedded snapshot.
+            if (!string.IsNullOrEmpty(texDef.relative_path))
+                imageData = LoadExternalTexture(texDef.relative_path);
+            if ((imageData == null || imageData.Length == 0) && !string.IsNullOrEmpty(texDef.path))
+                imageData = LoadExternalTexture(texDef.path);
+            if ((imageData == null || imageData.Length == 0) && !string.IsNullOrEmpty(texDef.source) &&
                 texDef.source.StartsWith("data:image", StringComparison.Ordinal))
             {
                 imageData = DecodeBase64Image(texDef.source);
-            }
-            // Try to load from external path
-            else
-            {
-                if (!string.IsNullOrEmpty(texDef.relative_path))
-                    imageData = LoadExternalTexture(texDef.relative_path, false);
-                if ((imageData == null || imageData.Length == 0) && !string.IsNullOrEmpty(texDef.path))
-                    imageData = LoadExternalTexture(texDef.path, true);
             }
 
             if (imageData == null || imageData.Length == 0)
@@ -187,11 +183,12 @@ namespace MartinCalander.BlockbenchImporter.Builders
             }
         }
 
-        private byte[] LoadExternalTexture(string path, bool reportMissing)
+        private byte[] LoadExternalTexture(string path)
         {
             try
             {
-                string directory = System.IO.Path.GetDirectoryName(assetPath);
+                path = path.Replace('\\', '/');
+                string directory = System.IO.Path.GetDirectoryName(assetPath) ?? string.Empty;
                 string fullPath = System.IO.Path.Combine(directory, path);
 
                 if (System.IO.File.Exists(fullPath))
@@ -205,7 +202,6 @@ namespace MartinCalander.BlockbenchImporter.Builders
                     return System.IO.File.ReadAllBytes(path);
                 }
 
-                if (reportMissing) Debug.LogWarning($"External texture not found: {path}");
                 return null;
             }
             catch (Exception e)
@@ -217,7 +213,7 @@ namespace MartinCalander.BlockbenchImporter.Builders
 
         private Material CreateMaterial(Texture2D texture, BbTexture texDef)
         {
-            Shader shader = GetShader(texDef);
+            Shader shader = GetShader();
             var material = new Material(shader);
             material.name = texture.name + "_Mat";
 
@@ -227,17 +223,18 @@ namespace MartinCalander.BlockbenchImporter.Builders
             // Determine if we need alpha clipping
             bool needsAlphaClip = settings.alphaMode == BlockbenchAlphaMode.Cutout ||
                                   (settings.alphaMode == BlockbenchAlphaMode.Auto && HasTransparency(texture));
-            bool doubleSided = texDef.render_sides == "double" || texDef.render_sides == "auto";
+            CullMode cullMode = texDef.render_sides == "back" ? CullMode.Front :
+                texDef.render_sides == "double" || texDef.render_sides == "auto" ? CullMode.Off : CullMode.Back;
 
             // Configure material based on render pipeline
-            ConfigureMaterial(material, needsAlphaClip, doubleSided, texDef);
+            ConfigureMaterial(material, needsAlphaClip, cullMode);
 
             return material;
         }
 
         private Material CreateDefaultMaterial(int colorIndex)
         {
-            Shader shader = GetDefaultShader();
+            Shader shader = GetShader();
             var material = new Material(shader);
             material.name = "Untextured_" + colorIndex;
             material.color = MarkerColors[colorIndex];
@@ -251,7 +248,7 @@ namespace MartinCalander.BlockbenchImporter.Builders
             return color;
         }
 
-        private Shader GetShader(BbTexture texDef)
+        private Shader GetShader()
         {
             // Try to detect render pipeline and use appropriate shader
             var pipeline = GraphicsSettings.currentRenderPipeline;
@@ -283,16 +280,11 @@ namespace MartinCalander.BlockbenchImporter.Builders
             }
 
             // Built-in pipeline
-            return Shader.Find(settings.materialMode == BlockbenchMaterialMode.Unlit ? "Unlit/Texture" : "Standard")
+            return Shader.Find(settings.materialMode == BlockbenchMaterialMode.Unlit ? "Blockbench/Unlit" : "Blockbench/Lit")
                    ?? Shader.Find("Standard");
         }
 
-        private Shader GetDefaultShader()
-        {
-            return GetShader(null);
-        }
-
-        private void ConfigureMaterial(Material material, bool needsAlphaClip, bool doubleSided, BbTexture texDef)
+        private void ConfigureMaterial(Material material, bool needsAlphaClip, CullMode cullMode)
         {
             var pipeline = GraphicsSettings.currentRenderPipeline;
 
@@ -303,44 +295,47 @@ namespace MartinCalander.BlockbenchImporter.Builders
                 // URP configuration
                 if (pipelineName.Contains("Universal") || pipelineName.Contains("URP"))
                 {
-                    ConfigureURPMaterial(material, needsAlphaClip, doubleSided);
+                    ConfigureURPMaterial(material, needsAlphaClip, cullMode);
                     return;
                 }
 
                 // HDRP configuration
                 if (pipelineName.Contains("HD") || pipelineName.Contains("HDRP"))
                 {
-                    ConfigureHDRPMaterial(material, needsAlphaClip, doubleSided);
+                    ConfigureHDRPMaterial(material, needsAlphaClip, cullMode);
                     return;
                 }
             }
 
             // Built-in pipeline configuration
-            ConfigureBuiltInMaterial(material, needsAlphaClip, doubleSided);
+            ConfigureBuiltInMaterial(material, needsAlphaClip, cullMode);
         }
 
-        private void ConfigureBuiltInMaterial(Material material, bool needsAlphaClip, bool doubleSided)
+        private void ConfigureBuiltInMaterial(Material material, bool needsAlphaClip, CullMode cullMode)
         {
             if (needsAlphaClip)
             {
-                material.SetFloat("_Mode", 1); // Cutout mode
-                material.SetInt("_SrcBlend", (int)BlendMode.One);
-                material.SetInt("_DstBlend", (int)BlendMode.Zero);
-                material.SetInt("_ZWrite", 1);
+                if (material.HasProperty("_Mode"))
+                {
+                    material.SetFloat("_Mode", 1); // Standard shader cutout mode
+                    material.SetInt("_SrcBlend", (int)BlendMode.One);
+                    material.SetInt("_DstBlend", (int)BlendMode.Zero);
+                    material.SetInt("_ZWrite", 1);
+                }
                 material.EnableKeyword("_ALPHATEST_ON");
                 material.DisableKeyword("_ALPHABLEND_ON");
                 material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
                 material.renderQueue = (int)RenderQueue.AlphaTest;
+                material.SetOverrideTag("RenderType", "TransparentCutout");
                 material.SetFloat("_Cutoff", settings.alphaCutoff);
             }
 
-            if (doubleSided)
-            {
-                material.SetInt("_Cull", (int)CullMode.Off);
-            }
+            if (material.HasProperty("_Cull"))
+                material.SetInt("_Cull", (int)cullMode);
+            material.doubleSidedGI = cullMode == CullMode.Off;
         }
 
-        private void ConfigureURPMaterial(Material material, bool needsAlphaClip, bool doubleSided)
+        private void ConfigureURPMaterial(Material material, bool needsAlphaClip, CullMode cullMode)
         {
             if (needsAlphaClip)
             {
@@ -349,15 +344,14 @@ namespace MartinCalander.BlockbenchImporter.Builders
                 material.SetFloat("_Cutoff", settings.alphaCutoff);
                 material.EnableKeyword("_ALPHATEST_ON");
                 material.renderQueue = (int)RenderQueue.AlphaTest;
+                material.SetOverrideTag("RenderType", "TransparentCutout");
             }
 
-            if (doubleSided)
-            {
-                material.SetFloat("_Cull", (float)CullMode.Off);
-            }
+            material.SetFloat("_Cull", (float)cullMode);
+            material.doubleSidedGI = cullMode == CullMode.Off;
         }
 
-        private void ConfigureHDRPMaterial(Material material, bool needsAlphaClip, bool doubleSided)
+        private void ConfigureHDRPMaterial(Material material, bool needsAlphaClip, CullMode cullMode)
         {
             if (needsAlphaClip)
             {
@@ -367,25 +361,36 @@ namespace MartinCalander.BlockbenchImporter.Builders
                 material.EnableKeyword("_ALPHATEST_ON");
             }
 
-            if (doubleSided)
-            {
-                material.SetFloat("_DoubleSidedEnable", 1);
-                material.SetFloat("_CullMode", (float)CullMode.Off);
-            }
+            material.SetFloat("_DoubleSidedEnable", cullMode == CullMode.Off ? 1 : 0);
+            material.SetFloat("_CullMode", (float)cullMode);
+            if (material.HasProperty("_CullModeForward"))
+                material.SetFloat("_CullModeForward", (float)cullMode);
+            material.doubleSidedGI = cullMode == CullMode.Off;
         }
 
         private bool HasTransparency(Texture2D texture)
         {
-            // Quick check for alpha by sampling some pixels
+            // A single transparent pixel is enough to require clipping.
             if (!texture.isReadable)
                 return false;
 
             try
             {
-                var pixels = texture.GetPixels32();
-                int sampleStep = Mathf.Max(1, pixels.Length / 100); // Sample about 100 pixels
+                if (texture.format == TextureFormat.RGB24)
+                    return false;
 
-                for (int i = 0; i < pixels.Length; i += sampleStep)
+                if (texture.format == TextureFormat.RGBA32)
+                {
+                    // This view belongs to the texture and is only valid until its data changes.
+                    var data = texture.GetPixelData<Color32>(0);
+                    for (int index = 0; index < data.Length; index++)
+                        if (data[index].a < 255)
+                            return true;
+                    return false;
+                }
+
+                var pixels = texture.GetPixels32();
+                for (int i = 0; i < pixels.Length; i++)
                 {
                     if (pixels[i].a < 255)
                         return true;

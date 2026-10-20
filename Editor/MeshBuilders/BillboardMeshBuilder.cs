@@ -42,14 +42,16 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             for (int index = 0; index < 4; index++) uvs[index] = baseUvs[(index + rotation) % 4];
 
             var mesh = new Mesh { name = element.name ?? "Billboard" };
+            // Billboard size and offset are screen-facing coordinates. The runtime
+            // aligns the -Z front to the camera, so local X must remain screen-right.
             mesh.vertices = new[]
             {
-                new Vector3(-left, bottom, 0), new Vector3(-right, bottom, 0),
-                new Vector3(-right, top, 0), new Vector3(-left, top, 0)
+                new Vector3(left, bottom, 0), new Vector3(right, bottom, 0),
+                new Vector3(right, top, 0), new Vector3(left, top, 0)
             };
             mesh.normals = new[] { Vector3.back, Vector3.back, Vector3.back, Vector3.back };
             mesh.uv = uvs;
-            mesh.SetTriangles(new[] { 0, 1, 2, 0, 2, 3 }, 0);
+            mesh.SetTriangles(new[] { 0, 2, 1, 0, 3, 2 }, 0);
             mesh.RecalculateBounds();
             return new CubeMeshResult
             {

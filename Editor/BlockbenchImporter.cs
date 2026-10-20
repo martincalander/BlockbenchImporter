@@ -12,7 +12,7 @@ using UnityEngine.Serialization;
 
 namespace MartinCalander.BlockbenchImporter
 {
-    [ScriptedImporter(20, "bbmodel")]
+    [ScriptedImporter(21, "bbmodel")]
     public sealed class BlockbenchImporter : ScriptedImporter
     {
         [FormerlySerializedAs("unitsPerPixel")]
@@ -169,6 +169,9 @@ namespace MartinCalander.BlockbenchImporter
             {
                 RegisterDependency(context, modelDirectory, projectRoot, texture.relative_path);
                 RegisterDependency(context, modelDirectory, projectRoot, texture.path);
+                // The texture loader also accepts project-relative paths.
+                RegisterDependency(context, string.Empty, projectRoot, texture.relative_path);
+                RegisterDependency(context, string.Empty, projectRoot, texture.path);
             }
         }
 
@@ -176,14 +179,15 @@ namespace MartinCalander.BlockbenchImporter
             string projectRoot, string source)
         {
             if (string.IsNullOrEmpty(source)) return;
+            source = source.Replace('\\', '/');
             string candidate = Path.IsPathRooted(source)
                 ? Path.GetFullPath(source)
                 : Path.GetFullPath(Path.Combine(modelDirectory, source));
             candidate = candidate.Replace('\\', '/');
             if (!candidate.StartsWith(projectRoot + "/", StringComparison.Ordinal)) return;
             string assetPath = candidate.Substring(projectRoot.Length + 1);
-            if ((assetPath.StartsWith("Assets/", StringComparison.Ordinal) ||
-                 assetPath.StartsWith("Packages/", StringComparison.Ordinal)) && File.Exists(candidate))
+            if (assetPath.StartsWith("Assets/", StringComparison.Ordinal) ||
+                assetPath.StartsWith("Packages/", StringComparison.Ordinal))
                 context.DependsOnSourceAsset(assetPath);
         }
 

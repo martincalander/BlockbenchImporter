@@ -23,12 +23,16 @@ namespace MartinCalander.BlockbenchImporter
 
         private void LateUpdate()
         {
-            if (Application.isPlaying && Camera.main != null) Face(Camera.main);
+            if (!Application.isPlaying) return;
+            Camera camera = Camera.main;
+            if (camera != null) Face(camera);
         }
 
         private void OnWillRenderObject()
         {
-            if (!Application.isPlaying && Camera.current != null) Face(Camera.current);
+            if (Application.isPlaying) return;
+            Camera camera = Camera.current;
+            if (camera != null) Face(camera);
         }
 
         private void Face(Camera camera)

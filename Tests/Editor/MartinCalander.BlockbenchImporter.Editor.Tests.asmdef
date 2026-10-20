@@ -2,7 +2,8 @@
   "name": "MartinCalander.BlockbenchImporter.Editor.Tests",
   "rootNamespace": "MartinCalander.BlockbenchImporter.Tests",
   "references": [
-    "MartinCalander.BlockbenchImporter"
+    "MartinCalander.BlockbenchImporter",
+    "MartinCalander.BlockbenchImporter.Runtime"
   ],
   "includePlatforms": [
     "Editor"

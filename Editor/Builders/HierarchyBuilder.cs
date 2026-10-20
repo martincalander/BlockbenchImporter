@@ -85,10 +85,21 @@ namespace MartinCalander.BlockbenchImporter.Builders
 
             float[] sourceOrigin = element.position ?? element.origin;
             Vector3 origin = CoordinateConverter.ConvertPositionRaw(sourceOrigin);
-            gameObject.transform.localPosition = (origin - parentOrigin) * settings.importScale;
+            // Armatures are identity containers. Only groups store child pivots
+            // in shared model coordinates; armature bones use parent-local origins.
+            gameObject.transform.localPosition = element.type == "armature"
+                ? Vector3.zero
+                : (origin - parentOrigin) * settings.importScale;
             gameObject.transform.localRotation = CoordinateConverter.ConvertRotation(element.rotation);
             if (element.scale != null && element.scale.Length >= 3)
                 gameObject.transform.localScale = new Vector3(element.scale[0], element.scale[1], element.scale[2]);
+            if (element.type == "cube" && element.rescale && element.rotation != null && element.rotation.Length >= 3)
+            {
+                float x = GetCubeRescale(element.rotation[0]);
+                float y = GetCubeRescale(element.rotation[1]);
+                float z = GetCubeRescale(element.rotation[2]);
+                gameObject.transform.localScale = new Vector3(y * z, x * z, x * y);
+            }
 
             string path = CombinePath(parentPath, name);
             Register(element.uuid, path, gameObject.transform);
@@ -146,7 +157,14 @@ namespace MartinCalander.BlockbenchImporter.Builders
             if (!string.IsNullOrEmpty(element.uuid))
                 builtElements[element.uuid] = new BuiltElement(element, gameObject, result);
             if (node.children.Count != 0)
-                BuildChildren(node.children, gameObject.transform, path, origin);
+                BuildChildren(node.children, gameObject.transform, path, Vector3.zero);
+        }
+
+        private static float GetCubeRescale(float angle)
+        {
+            angle = Mathf.Abs(angle);
+            if (angle > 45f) angle = 90f - angle;
+            return 1f / Mathf.Cos(angle * Mathf.Deg2Rad);
         }
 
         private void ApplyImportScale(Mesh mesh)
@@ -170,6 +188,10 @@ namespace MartinCalander.BlockbenchImporter.Builders
                 CollectChildrenOfType(armature, "mesh", meshElements, false);
                 if (boneElements.Count == 0) continue;
 
+                List<BbElement> activeBones = boneElements
+                    .Where(bone => builtElements.ContainsKey(bone.uuid)).ToList();
+                if (activeBones.Count == 0) continue;
+
                 foreach (BbElement meshElement in meshElements)
                 {
                     if (!builtElements.TryGetValue(meshElement.uuid, out BuiltElement builtMesh) ||
@@ -177,14 +199,10 @@ namespace MartinCalander.BlockbenchImporter.Builders
                         builtMesh.result.sourceVertexIds.Length != builtMesh.result.mesh.vertexCount)
                         continue;
 
-                    List<BbElement> activeBones = boneElements
-                        .Where(bone => builtElements.ContainsKey(bone.uuid)).ToList();
                     Transform[] bones = activeBones
                         .Select(bone => builtElements[bone.uuid].gameObject.transform)
                         .Concat(new[] { builtMesh.gameObject.transform })
                         .ToArray();
-                    if (bones.Length <= 1) continue;
-
                     var bindPoses = new Matrix4x4[bones.Length];
                     for (int index = 0; index < bones.Length; index++)
                         bindPoses[index] = bones[index].worldToLocalMatrix * builtMesh.gameObject.transform.localToWorldMatrix;
@@ -192,21 +210,29 @@ namespace MartinCalander.BlockbenchImporter.Builders
 
                     var boneWeights = new BoneWeight[builtMesh.result.mesh.vertexCount];
                     string meshPrefix = meshElement.uuid.Length >= 6 ? meshElement.uuid.Substring(0, 6) + ":" : string.Empty;
+                    var weightsByVertex = new Dictionary<string, BoneWeight>();
+                    var influences = new List<KeyValuePair<int, float>>();
                     for (int vertex = 0; vertex < boneWeights.Length; vertex++)
                     {
                         string vertexId = builtMesh.result.sourceVertexIds[vertex];
-                        var influences = new List<KeyValuePair<int, float>>();
-                        for (int boneIndex = 0; boneIndex < bones.Length - 1; boneIndex++)
+                        if (!weightsByVertex.TryGetValue(vertexId, out BoneWeight weightForVertex))
                         {
-                            BbElement bone = activeBones[boneIndex];
-                            if (!bone.vertex_weights.TryGetValue(meshPrefix + vertexId, out float weight) &&
-                                !bone.vertex_weights.TryGetValue(vertexId, out weight)) continue;
-                            if (weight > 0f) influences.Add(new KeyValuePair<int, float>(boneIndex, weight));
+                            influences.Clear();
+                            string prefixedVertexId = meshPrefix + vertexId;
+                            for (int boneIndex = 0; boneIndex < bones.Length - 1; boneIndex++)
+                            {
+                                BbElement bone = activeBones[boneIndex];
+                                if (!bone.vertex_weights.TryGetValue(prefixedVertexId, out float weight) &&
+                                    !bone.vertex_weights.TryGetValue(vertexId, out weight)) continue;
+                                if (weight > 0f) influences.Add(new KeyValuePair<int, float>(boneIndex, weight));
+                            }
+                            influences.Sort((left, right) => right.Value.CompareTo(left.Value));
+                            if (influences.Count == 0)
+                                influences.Add(new KeyValuePair<int, float>(bones.Length - 1, 1f));
+                            weightForVertex = CreateBoneWeight(influences);
+                            weightsByVertex.Add(vertexId, weightForVertex);
                         }
-                        influences.Sort((left, right) => right.Value.CompareTo(left.Value));
-                        if (influences.Count == 0)
-                            influences.Add(new KeyValuePair<int, float>(bones.Length - 1, 1f));
-                        boneWeights[vertex] = CreateBoneWeight(influences);
+                        boneWeights[vertex] = weightForVertex;
                     }
                     builtMesh.result.mesh.boneWeights = boneWeights;
 

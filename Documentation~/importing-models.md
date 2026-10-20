@@ -31,12 +31,26 @@ Select the `.bbmodel` in the Project window. Change a setting, then press **Appl
 
 A custom Blockbench shader, Unity post-processing, tone mapping, or render-pipeline setting can still change the final look.
 
+When both an external image and an embedded snapshot are present, the importer uses the external image, matching Blockbench. It tries the saved relative path first, then the saved path, then the embedded image. Referenced images under `Assets/` or `Packages/` trigger reimport when added, edited, or deleted. Files outside the Unity project require a manual model reimport after editing.
+
+Automatic alpha detection includes isolated transparent pixels. Built-in pipeline materials use the package's Unlit or Lit shader to preserve marker colors, cutout, and front, back, or double-sided rendering. URP uses its native shaders.
+
 ### Animation
 
 - **Import Animations** creates one `AnimationClip` for each supported animation.
 - **Create Animator Controller** adds an Animator and a controller with one state per clip.
 
 Numeric position, rotation, and scale tracks support linear, stepped, Catmull-Rom, and Bezier interpolation. Molang expressions are not run; see [format support](format-support.md).
+
+Clips retain the declared animation duration and hold their final values when the last key is earlier. Split incoming/outgoing values and independent Bezier handles are preserved. Global rotation tracks compensate for animated parent rotations. Projects saved before format 5 receive the legacy animation axis conversion.
+
+## Faster Play mode
+
+The package supports entering Play mode with **Reload Domain** disabled. Enable the Enter Play Mode options in **Project Settings > Editor** and leave **Reload Scene** enabled when you want scene objects reset on every run.
+
+Import builders keep their working data within each import, and billboards read the current camera without retaining a reference between Play sessions. Generated meshes, materials, animation clips, and Animator Controllers remain ordinary Unity assets.
+
+Custom postprocessors and gameplay scripts must manage their own static state and event subscriptions. Follow Unity's [code lifecycle guidance](https://docs.unity.com/en-us/engine/7000.0/manual/programming-environment/code-reload-serialization/code-reload/code-lifecycle) when adding state that must reset on Play mode entry or release on exit.
 
 ## Source control
 

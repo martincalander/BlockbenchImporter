@@ -83,7 +83,7 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 {
                     if (texObj is Dictionary<string, object> texDict)
                     {
-                        var texture = ParseTexture(texDict);
+                        var texture = ParseTexture(texDict, model.resolution);
                         model.textures.Add(texture);
                     }
                 }
@@ -112,6 +112,8 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 };
             }
 
+            ApplyDefaultTextures(model, root);
+            ConvertLegacyAnimationAxes(model);
             model.BuildLookupTables();
             Validate(model);
             return model;
@@ -151,9 +153,6 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 if (animator.type != "bone")
                     model.warnings.Add("Animation '" + animation.name + "' contains '" + animator.type +
                                        "' tracks. Only transform tracks produce Unity curves.");
-                if (animator.rotation_global)
-                    model.warnings.Add("Animation '" + animation.name + "' uses global rotation on '" +
-                                       animator.name + "'. The curve is baked relative to the imported parent rest pose.");
                 foreach (BbKeyframe keyframe in animator.keyframes)
                 foreach (BbDataPoint point in keyframe.data_points)
                     if (!IsNumeric(point.x) || !IsNumeric(point.y) || !IsNumeric(point.z))
@@ -166,6 +165,75 @@ namespace MartinCalander.BlockbenchImporter.Parsing
         {
             return string.IsNullOrEmpty(value) || float.TryParse(value, NumberStyles.Float,
                 CultureInfo.InvariantCulture, out _);
+        }
+
+        private static void ConvertLegacyAnimationAxes(BbModel model)
+        {
+            if (model.meta == null || !Version.TryParse(model.meta.format_version, out Version version) ||
+                version.Major >= 5)
+                return;
+
+            foreach (BbAnimation animation in model.animations)
+            foreach (BbAnimator animator in animation.animators.Values)
+            foreach (BbKeyframe keyframe in animator.keyframes)
+            {
+                if (keyframe.channel != "position" && keyframe.channel != "rotation") continue;
+                foreach (BbDataPoint point in keyframe.data_points)
+                {
+                    point.x = NegateNumeric(point.x);
+                    if (keyframe.channel == "rotation") point.y = NegateNumeric(point.y);
+                }
+                int axes = keyframe.channel == "rotation" ? 2 : 1;
+                foreach (float[] handle in new[] { keyframe.bezier_left_value, keyframe.bezier_right_value })
+                    if (handle != null)
+                        for (int axis = 0; axis < axes && axis < handle.Length; axis++)
+                            handle[axis] = -handle[axis];
+            }
+        }
+
+        private static string NegateNumeric(string value)
+        {
+            return float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float number)
+                ? (-number).ToString("R", CultureInfo.InvariantCulture)
+                : value;
+        }
+
+        private static void ApplyDefaultTextures(BbModel model, Dictionary<string, object> root)
+        {
+            if (model.textures.Count == 0) return;
+            string format = model.meta?.model_format;
+            bool singleTexture = format == "bedrock" || format == "bedrock_old" || format == "skin" ||
+                                 format == "modded_entity" || format == "image";
+            bool defaultTexture = format == "bedrock_block" || format == "optifine_entity" ||
+                                  format == "optifine_part";
+            if (!singleTexture && !defaultTexture) return;
+
+            int textureIndex = 0;
+            if (defaultTexture)
+            {
+                int selected = model.textures.FindIndex(texture => texture.use_as_default);
+                if (selected >= 0) textureIndex = selected;
+            }
+            if (!(root.TryGetValue("elements", out object raw) && raw is List<object> elements)) return;
+            int index = 0;
+            foreach (object value in elements)
+            {
+                if (!(value is Dictionary<string, object> elementData)) continue;
+                BbElement element = model.elements[index++];
+                if (!(elementData.TryGetValue("faces", out object facesRaw) &&
+                      facesRaw is Dictionary<string, object> faces)) continue;
+                foreach (var pair in faces)
+                {
+                    if (!(pair.Value is Dictionary<string, object> face)) continue;
+                    bool hasTexture = face.TryGetValue("texture", out object assignment);
+                    if (hasTexture && assignment == null) continue;
+                    if (!singleTexture && hasTexture && !(assignment is bool flag && !flag)) continue;
+                    if (element.faces.TryGetValue(pair.Key, out BbFace cubeFace))
+                        cubeFace.texture = textureIndex;
+                    if (element.meshFaces != null && element.meshFaces.TryGetValue(pair.Key, out BbMeshFace meshFace))
+                        meshFace.texture = textureIndex;
+                }
+            }
         }
 
         private static BbElement ParseElement(Dictionary<string, object> dict)
@@ -309,7 +377,7 @@ namespace MartinCalander.BlockbenchImporter.Parsing
             return group;
         }
 
-        private static BbTexture ParseTexture(Dictionary<string, object> dict)
+        private static BbTexture ParseTexture(Dictionary<string, object> dict, int[] resolution)
         {
             return new BbTexture
             {
@@ -326,13 +394,14 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 frame_time = GetInt(dict, "frame_time", 1),
                 frame_count = GetInt(dict, "frame_count", 1),
                 visible = GetBool(dict, "visible", true),
+                use_as_default = GetBool(dict, "use_as_default"),
                 mode = GetString(dict, "mode", "bitmap"),
                 saved = GetBool(dict, "saved"),
                 keep_size = GetBool(dict, "keep_size"),
                 width = GetInt(dict, "width", 16),
                 height = GetInt(dict, "height", 16),
-                uv_width = GetInt(dict, "uv_width", 16),
-                uv_height = GetInt(dict, "uv_height", 16),
+                uv_width = GetInt(dict, "uv_width", resolution[0]),
+                uv_height = GetInt(dict, "uv_height", resolution[1]),
                 particle = GetBool(dict, "particle"),
                 layers_enabled = GetBool(dict, "layers_enabled")
             };
@@ -398,11 +467,11 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 time = GetFloat(dict, "time"),
                 color = GetInt(dict, "color"),
                 interpolation = GetString(dict, "interpolation", "linear"),
-                bezier_left_time = GetFloatArray(dict, "bezier_left_time", null),
-                bezier_left_value = GetFloatArray(dict, "bezier_left_value", null),
-                bezier_right_time = GetFloatArray(dict, "bezier_right_time", null),
-                bezier_right_value = GetFloatArray(dict, "bezier_right_value", null),
-                bezier_linked = GetBool(dict, "bezier_linked")
+                bezier_left_time = GetFloatArray(dict, "bezier_left_time", new[] { -0.1f, -0.1f, -0.1f }),
+                bezier_left_value = GetFloatArray(dict, "bezier_left_value", new float[3]),
+                bezier_right_time = GetFloatArray(dict, "bezier_right_time", new[] { 0.1f, 0.1f, 0.1f }),
+                bezier_right_value = GetFloatArray(dict, "bezier_right_value", new float[3]),
+                bezier_linked = GetBool(dict, "bezier_linked", true)
             };
 
             if (dict.TryGetValue("data_points", out var dpObj) && dpObj is List<object> dpList)
@@ -413,9 +482,9 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                     {
                         var dp = new BbDataPoint
                         {
-                            x = GetStringOrNumber(dpDict, "x"),
-                            y = GetStringOrNumber(dpDict, "y"),
-                            z = GetStringOrNumber(dpDict, "z"),
+                            x = GetStringOrNumber(dpDict, "x", kf.channel == "scale" ? "1" : "0"),
+                            y = GetStringOrNumber(dpDict, "y", kf.channel == "scale" ? "1" : "0"),
+                            z = GetStringOrNumber(dpDict, "z", kf.channel == "scale" ? "1" : "0"),
                             effect = GetString(dpDict, "effect"),
                             locator = GetString(dpDict, "locator"),
                             script = GetString(dpDict, "script"),
@@ -513,7 +582,7 @@ namespace MartinCalander.BlockbenchImporter.Parsing
             return defaultValue;
         }
 
-        private static string GetStringOrNumber(Dictionary<string, object> dict, string key)
+        private static string GetStringOrNumber(Dictionary<string, object> dict, string key, string defaultValue = "0")
         {
             if (dict.TryGetValue(key, out var value) && value != null)
             {
@@ -522,7 +591,7 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 if (value is long l) return l.ToString(CultureInfo.InvariantCulture);
                 return value.ToString();
             }
-            return "0";
+            return defaultValue;
         }
 
         private static bool GetBool(Dictionary<string, object> dict, string key, bool defaultValue = false)
@@ -602,23 +671,6 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                     result[i] = val;
             }
             return result;
-        }
-
-        private static int[] GetIntArray(Dictionary<string, object> dict, string key, int[] defaultValue)
-        {
-            if (dict.TryGetValue(key, out var value) && value is List<object> list)
-            {
-                var result = new int[list.Count];
-                for (int i = 0; i < list.Count; i++)
-                {
-                    if (list[i] is long l) result[i] = (int)l;
-                    else if (list[i] is double d) result[i] = (int)d;
-                    else if (list[i] is int intVal) result[i] = intVal;
-                    else if (int.TryParse(list[i]?.ToString(), out int val)) result[i] = val;
-                }
-                return result;
-            }
-            return defaultValue;
         }
 
         /// <summary>

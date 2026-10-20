@@ -169,6 +169,7 @@ namespace MartinCalander.BlockbenchImporter.Model
         public int frame_order_type;
         public float[] frame_order;
         public bool visible = true;
+        public bool use_as_default;
         public string mode = "bitmap";
         public bool saved;
         public bool keep_size;

@@ -16,9 +16,9 @@ namespace MartinCalander.BlockbenchImporter.Tests
         public void CoordinateConversion_MirrorsXAndRotationHandedness()
         {
             Assert.That(CoordinateConverter.ConvertPositionRaw(2, 3, 4), Is.EqualTo(new Vector3(-2, 3, 4)));
-            Quaternion expected = Quaternion.AngleAxis(10, Vector3.right) *
+            Quaternion expected = Quaternion.AngleAxis(-30, Vector3.forward) *
                                   Quaternion.AngleAxis(-20, Vector3.up) *
-                                  Quaternion.AngleAxis(-30, Vector3.forward);
+                                  Quaternion.AngleAxis(10, Vector3.right);
             Assert.That(Quaternion.Angle(CoordinateConverter.ConvertRotation(10, 20, 30), expected), Is.LessThan(0.001f));
         }
 
