@@ -14,6 +14,10 @@ Parsing and Unity object creation are kept apart on purpose. A format change sho
 
 Position and scale curves retain separate incoming and outgoing tangents. Rotation curves are sampled with extra keys around discontinuities, and global rotations account for animated ancestors. The parser converts the older animation axes described in Blockbench's [format history](https://www.blockbench.net/wiki/docs/bbmodel/).
 
+Rotation tracks parse their incoming and outgoing numeric values once per clip, then locate surrounding keys with a binary search. These caches are rebuilt on each build, so edits to the source model are visible when a builder is reused.
+
+Mesh builders reuse temporary UV and triangulation buffers within each mesh. Cube corner lookups are fixed data; public triangulation results remain independent lists.
+
 Transparency checks scan every pixel and access readable RGBA32 data directly. Armature weights are calculated once for each source vertex in each mesh, then reused for copies created at face boundaries. These working caches belong to the current import.
 
 Groups use shared model pivots, while armature bones use parent-local origins. Coordinate conversion mirrors X and composes rotations in Blockbench's ZYX order. Polygon winding and normals are converted together.
@@ -36,7 +40,7 @@ Please do not work around one model by weakening those rules.
 
 ## Play mode lifecycle
 
-The importer has no mutable static session state or global event subscriptions. Its static face names and marker colors are fixed lookup data. Parsing, texture and material caches, hierarchy maps, and animation builders belong to each import.
+The importer has no mutable static session state or global event subscriptions. Its static face names, cube corner indices, and marker colors are fixed lookup data. Parsing, texture and material caches, hierarchy maps, and animation builders belong to each import.
 
 `OnPostBlockbenchImport` belongs to the importer instance. Register it idempotently from `OnPreprocessAsset`, as shown in the user guide, because Unity can reuse importer instances. Custom callbacks should avoid capturing scene objects or keeping global session state.
 

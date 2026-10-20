@@ -184,6 +184,58 @@ namespace MartinCalander.BlockbenchImporter.Tests
         }
 
         [Test]
+        public void DuplicateRotationTimesKeepTheFirstExactKeyAndLastOutgoingKey()
+        {
+            WithClip("rotation", new[]
+            {
+                Key("rotation", 0f, 0f), Key("rotation", 1f, 60f),
+                Key("rotation", 1f, 120f), Key("rotation", 2f, 180f)
+            }, 2f, clip =>
+            {
+                Assert.That(Quaternion.Angle(Rotation(clip, 0.5f), Quaternion.AngleAxis(30f, Vector3.right)),
+                    Is.LessThan(0.1f));
+                Assert.That(Quaternion.Angle(Rotation(clip, 1f), Quaternion.AngleAxis(60f, Vector3.right)),
+                    Is.LessThan(0.1f));
+                Assert.That(Quaternion.Angle(Rotation(clip, 1.5f), Quaternion.AngleAxis(150f, Vector3.right)),
+                    Is.LessThan(0.1f));
+            });
+        }
+
+        [Test]
+        public void RebuildingTheSameBuilderReadsEditedIncomingAndOutgoingRotationPoints()
+        {
+            BbKeyframe split = Key("rotation", 0f, 10f);
+            split.data_points.Add(Point(20f));
+            var animator = new BbAnimator();
+            animator.keyframes.Add(split);
+            animator.keyframes.Add(Key("rotation", 1f, 60f));
+            var builder = new AnimationBuilder(Model(animator, 1f),
+                new Dictionary<string, string> { ["target"] = "target" },
+                new Dictionary<string, Transform>(), new BlockbenchImporterSettings { importScale = 1f });
+            AnimationClip original = null, rebuilt = null;
+            try
+            {
+                original = builder.BuildAnimationClips().Single();
+                split.data_points[0].x = "45";
+                split.data_points[1].x = "90";
+                rebuilt = builder.BuildAnimationClips().Single();
+                Assert.That(Quaternion.Angle(Rotation(original, 0f), Quaternion.AngleAxis(10f, Vector3.right)),
+                    Is.LessThan(0.1f));
+                Assert.That(Quaternion.Angle(Rotation(original, 0.5f), Quaternion.AngleAxis(40f, Vector3.right)),
+                    Is.LessThan(0.1f));
+                Assert.That(Quaternion.Angle(Rotation(rebuilt, 0f), Quaternion.AngleAxis(45f, Vector3.right)),
+                    Is.LessThan(0.1f));
+                Assert.That(Quaternion.Angle(Rotation(rebuilt, 0.5f), Quaternion.AngleAxis(75f, Vector3.right)),
+                    Is.LessThan(0.1f));
+            }
+            finally
+            {
+                if (original != null) Object.DestroyImmediate(original);
+                if (rebuilt != null) Object.DestroyImmediate(rebuilt);
+            }
+        }
+
+        [Test]
         public void GlobalRotationCancelsTheAnimatedParentAtEverySample()
         {
             var root = new GameObject("Animation test");

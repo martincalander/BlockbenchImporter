@@ -124,6 +124,22 @@ namespace MartinCalander.BlockbenchImporter.Builders
             public readonly List<BbKeyframe> position = new List<BbKeyframe>();
             public readonly List<BbKeyframe> rotation = new List<BbKeyframe>();
             public readonly List<BbKeyframe> scale = new List<BbKeyframe>();
+            public Vector3[] rotationIncoming;
+            public Vector3[] rotationOutgoing;
+
+            public void CacheRotationPoints()
+            {
+                if (rotation.Count == 0) return;
+                rotationIncoming = new Vector3[rotation.Count];
+                rotationOutgoing = new Vector3[rotation.Count];
+                for (int index = 0; index < rotation.Count; index++)
+                {
+                    BbKeyframe key = rotation[index];
+                    rotationIncoming[index] = GetPoint(key, false);
+                    rotationOutgoing[index] = key.data_points != null && key.data_points.Count > 1
+                        ? GetPoint(key, true) : rotationIncoming[index];
+                }
+            }
         }
 
         private AnimationClip BuildAnimationClip(BbAnimation anim)
@@ -170,6 +186,7 @@ namespace MartinCalander.BlockbenchImporter.Builders
                 }
                 target.position.Sort((left, right) => left.time.CompareTo(right.time));
                 target.rotation.Sort((left, right) => left.time.CompareTo(right.time));
+                target.CacheRotationPoints();
                 target.scale.Sort((left, right) => left.time.CompareTo(right.time));
                 if (target.position.Count != 0 || target.rotation.Count != 0 || target.scale.Count != 0 ||
                     target.animator.rotation_global)
@@ -449,12 +466,12 @@ namespace MartinCalander.BlockbenchImporter.Builders
             if (target.animator.quaternion_interpolation && before != after &&
                 keys[before].interpolation != "step")
             {
-                Quaternion left = target.restRotation * CoordinateConverter.ConvertAnimationRotation(GetPoint(keys[before], true));
-                Quaternion right = target.restRotation * CoordinateConverter.ConvertAnimationRotation(GetPoint(keys[after], false));
+                Quaternion left = target.restRotation * CoordinateConverter.ConvertAnimationRotation(target.rotationOutgoing[before]);
+                Quaternion right = target.restRotation * CoordinateConverter.ConvertAnimationRotation(target.rotationIncoming[after]);
                 return Quaternion.SlerpUnclamped(left, right, Mathf.InverseLerp(keys[before].time, keys[after].time, time));
             }
-            Vector3 offset = new Vector3(EvaluateAxis(keys, time, 0, before, after, loop),
-                EvaluateAxis(keys, time, 1, before, after, loop), EvaluateAxis(keys, time, 2, before, after, loop));
+            Vector3 offset = new Vector3(EvaluateAxis(target, time, 0, before, after, loop),
+                EvaluateAxis(target, time, 1, before, after, loop), EvaluateAxis(target, time, 2, before, after, loop));
             return target.animator.quaternion_interpolation || !target.hasRestEuler
                 ? target.restRotation * CoordinateConverter.ConvertAnimationRotation(offset)
                 : CoordinateConverter.ConvertAnimationRotation(target.restEuler + offset);
@@ -462,21 +479,43 @@ namespace MartinCalander.BlockbenchImporter.Builders
 
         private static void FindKeyframes(List<BbKeyframe> keys, float time, out int before, out int after)
         {
-            before = after = 0;
-            for (int index = 0; index < keys.Count; index++)
+            // Sorted NaN times retain the previous scan behavior for malformed source data.
+            if (keys.Count == 0 || float.IsNaN(time) || float.IsNaN(keys[0].time))
             {
-                if (keys[index].time <= time) before = index;
-                if (keys[index].time >= time) { after = index; return; }
+                before = after = 0;
+                for (int index = 0; index < keys.Count; index++)
+                {
+                    if (keys[index].time <= time) before = index;
+                    if (keys[index].time >= time) { after = index; return; }
+                }
+                after = before;
+                return;
             }
-            after = before;
+
+            int low = 0, high = keys.Count;
+            while (low < high)
+            {
+                int middle = low + (high - low) / 2;
+                if (keys[middle].time < time) low = middle + 1;
+                else high = middle;
+            }
+            if (low == keys.Count)
+            {
+                before = after = keys.Count - 1;
+                return;
+            }
+            after = low;
+            // An exact time uses the first equal key; later times use the last duplicate before them.
+            before = keys[low].time <= time ? low : Mathf.Max(0, low - 1);
         }
 
-        private static float EvaluateAxis(List<BbKeyframe> keys, float time, int axis, int before, int after, string loop)
+        private static float EvaluateAxis(AnimationTarget target, float time, int axis, int before, int after, string loop)
         {
+            List<BbKeyframe> keys = target.rotation;
             if (before == after)
-                return GetAxis(GetPoint(keys[before], time > keys[before].time), axis);
-            float left = GetAxis(GetPoint(keys[before], true), axis);
-            float right = GetAxis(GetPoint(keys[after], false), axis);
+                return GetAxis(time > keys[before].time ? target.rotationOutgoing[before] : target.rotationIncoming[before], axis);
+            float left = GetAxis(target.rotationOutgoing[before], axis);
+            float right = GetAxis(target.rotationIncoming[after], axis);
             string mode = SegmentMode(keys[before], keys[after]);
             if (mode == "step") return left;
             float alpha = Mathf.InverseLerp(keys[before].time, keys[after].time, time);
@@ -490,9 +529,9 @@ namespace MartinCalander.BlockbenchImporter.Builders
                     if (next >= keys.Count) next = 1;
                 }
                 float p0 = previous >= 0 && keys[before].data_points.Count == 1
-                    ? GetAxis(GetPoint(keys[previous], true), axis) : left;
+                    ? GetAxis(target.rotationOutgoing[previous], axis) : left;
                 float p3 = next < keys.Count && keys[after].data_points.Count == 1
-                    ? GetAxis(GetPoint(keys[next], false), axis) : right;
+                    ? GetAxis(target.rotationIncoming[next], axis) : right;
                 float a2 = alpha * alpha, a3 = a2 * alpha;
                 return 0.5f * ((2f * left) + (-p0 + right) * alpha +
                     (2f * p0 - 5f * left + 4f * right - p3) * a2 + (-p0 + 3f * left - 3f * right + p3) * a3);

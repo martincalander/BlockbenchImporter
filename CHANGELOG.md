@@ -14,6 +14,7 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 - Moved governance, maintainer, and release-process documents under `.github/`.
 - Renamed **Units Per Pixel** to **Import Scale** and baked the conversion into generated spatial data so prefab roots keep unit scale.
 - Reduced import allocations when applying Bezier tangents, checking texture transparency, and assigning armature weights to vertices shared by multiple faces.
+- Reused mesh-building buffers and cached rotation keyframe values to reduce repeated allocations and parsing during import.
 - Removed unused private helpers and repeated camera lookups while preserving public APIs.
 - Excluded repository automation files from npm package archives.
 

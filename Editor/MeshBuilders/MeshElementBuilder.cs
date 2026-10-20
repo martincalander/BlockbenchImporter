@@ -49,6 +49,9 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             var faceVerts = new List<Vector3>();
             var faceUvs = new List<Vector2>();
             var faceVertexIds = new List<string>();
+            var triangles = new List<int>(6);
+            var projectedPoints = new List<Vector2>(4);
+            var faceIndices = new List<int>(4);
 
             foreach (var faceKvp in element.meshFaces)
             {
@@ -106,7 +109,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                 Vector3 normal = -CalculateFaceNormal(faceVerts);
 
                 // Triangulate the face
-                var triangles = EarClipTriangulate(faceVerts, normal);
+                EarClipTriangulate(faceVerts, normal, triangles, projectedPoints, faceIndices);
                 EnsureWindingMatchesNormal(triangles, faceVerts, normal);
 
                 // Add vertices and triangles
@@ -215,9 +218,18 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
         public static List<int> EarClipTriangulate(List<Vector3> vertices, Vector3 normal)
         {
             var triangles = new List<int>();
+            var points2D = vertices.Count > 3 ? new List<Vector2>(vertices.Count) : null;
+            var indices = vertices.Count > 3 ? new List<int>(vertices.Count) : null;
+            EarClipTriangulate(vertices, normal, triangles, points2D, indices);
+            return triangles;
+        }
 
+        private static void EarClipTriangulate(List<Vector3> vertices, Vector3 normal,
+            List<int> triangles, List<Vector2> points2D, List<int> indices)
+        {
+            triangles.Clear();
             if (vertices.Count < 3)
-                return triangles;
+                return;
 
             if (vertices.Count == 3)
             {
@@ -225,14 +237,14 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                 triangles.Add(0);
                 triangles.Add(2);
                 triangles.Add(1);
-                return triangles;
+                return;
             }
 
             // Project to 2D
             Vector3 u, v;
             GetOrthonormalBasis(normal, out u, out v);
 
-            var points2D = new List<Vector2>(vertices.Count);
+            points2D.Clear();
             foreach (var vert in vertices)
             {
                 float px = Vector3.Dot(vert, u);
@@ -252,7 +264,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             bool ccw = signedArea > 0;
 
             // Create index list
-            var indices = new List<int>(vertices.Count);
+            indices.Clear();
             for (int i = 0; i < vertices.Count; i++)
                 indices.Add(i);
 
@@ -332,8 +344,6 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                 triangles.Add(indices[2]);
                 triangles.Add(indices[1]);
             }
-
-            return triangles;
         }
 
         private static void GetOrthonormalBasis(Vector3 normal, out Vector3 u, out Vector3 v)

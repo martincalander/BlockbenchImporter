@@ -111,6 +111,66 @@ namespace MartinCalander.BlockbenchImporter.Tests
         }
 
         [Test]
+        public void MeshTriangulationScratchDoesNotLeakBetweenDifferentFaceSizes()
+        {
+            var element = Polygon(new[]
+            {
+                new[] { 0f, 0f, 0f }, new[] { 2f, 0f, 0f },
+                new[] { 2f, 1f, 0f }, new[] { 1f, 1f, 0f },
+                new[] { 1f, 2f, 0f }, new[] { 0f, 2f, 0f }
+            });
+            var faces = new[]
+            {
+                element.meshFaces["face"],
+                new BbMeshFace { vertices = new List<string> { "0", "1", "3" } },
+                new BbMeshFace { vertices = new List<string> { "0", "1", "2", "3" } }
+            };
+            var expectedVertices = new List<Vector3>();
+            var expectedNormals = new List<Vector3>();
+            var expectedUvs = new List<Vector2>();
+            var expectedTriangles = new List<int>();
+            var expectedSourceIds = new List<string>();
+            var combinedFaces = new Dictionary<string, BbMeshFace>();
+            for (int index = 0; index < faces.Length; index++)
+            {
+                element.meshFaces = new Dictionary<string, BbMeshFace> { ["face"] = faces[index] };
+                CubeMeshResult isolated = MeshElementBuilder.BuildMeshElement(element, new[] { 16, 16 }, 0);
+                try
+                {
+                    int offset = expectedVertices.Count;
+                    expectedVertices.AddRange(isolated.mesh.vertices);
+                    expectedNormals.AddRange(isolated.mesh.normals);
+                    expectedUvs.AddRange(isolated.mesh.uv);
+                    expectedSourceIds.AddRange(isolated.sourceVertexIds);
+                    foreach (int vertex in isolated.mesh.triangles) expectedTriangles.Add(vertex + offset);
+                }
+                finally
+                {
+                    Object.DestroyImmediate(isolated.mesh);
+                }
+                combinedFaces[index.ToString()] = faces[index];
+            }
+
+            element.meshFaces = combinedFaces;
+            for (int build = 0; build < 2; build++)
+            {
+                CubeMeshResult combined = MeshElementBuilder.BuildMeshElement(element, new[] { 16, 16 }, 0);
+                try
+                {
+                    Assert.That(combined.mesh.vertices, Is.EqualTo(expectedVertices));
+                    Assert.That(combined.mesh.normals, Is.EqualTo(expectedNormals));
+                    Assert.That(combined.mesh.uv, Is.EqualTo(expectedUvs));
+                    Assert.That(combined.mesh.triangles, Is.EqualTo(expectedTriangles));
+                    Assert.That(combined.sourceVertexIds, Is.EqualTo(expectedSourceIds));
+                }
+                finally
+                {
+                    Object.DestroyImmediate(combined.mesh);
+                }
+            }
+        }
+
+        [Test]
         public void NestedArmatureOriginsAndBindPosesPreserveRestGeometryAndDeformWeightedVertices()
         {
             const string model = @"{

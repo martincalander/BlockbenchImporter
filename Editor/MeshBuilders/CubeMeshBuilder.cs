@@ -12,6 +12,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
     public static class CubeMeshBuilder
     {
         private static readonly string[] FaceNames = { "north", "south", "east", "west", "up", "down" };
+        private static readonly int[][] FaceCornerIndices = CreateFaceCornerIndices();
 
         /// <summary>
         /// Build a mesh from a Blockbench cube element.
@@ -70,13 +71,16 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             corners[7] = new Vector3(min.x, max.y, max.z);
 
             // Collect vertices, normals, UVs per texture
-            var verticesList = new List<Vector3>();
-            var normalsList = new List<Vector3>();
-            var uvsList = new List<Vector2>();
+            int vertexCapacity = Mathf.Min(element.faces.Count, FaceNames.Length) * 4;
+            var verticesList = new List<Vector3>(vertexCapacity);
+            var normalsList = new List<Vector3>(vertexCapacity);
+            var uvsList = new List<Vector2>(vertexCapacity);
             var trianglesByTexture = new Dictionary<int, List<int>>();
+            var baseUvs = new Vector2[4];
 
-            foreach (var faceName in FaceNames)
+            for (int faceIndex = 0; faceIndex < FaceNames.Length; faceIndex++)
             {
+                string faceName = FaceNames[faceIndex];
                 if (!element.faces.TryGetValue(faceName, out var face))
                     continue;
 
@@ -96,7 +100,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                 }
 
                 Vector3 normal = CoordinateConverter.GetFaceNormal(faceName);
-                int[] cornerIndices = CoordinateConverter.GetFaceCornerIndices(faceName);
+                int[] cornerIndices = FaceCornerIndices[faceIndex];
 
                 int baseVertex = verticesList.Count;
 
@@ -122,7 +126,6 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                 float v1 = 1f - face.uv[3] / texHeight;
 
                 // Base UV corners (before rotation)
-                Vector2[] baseUvs = new Vector2[4];
                 baseUvs[0] = new Vector2(u0, v1); // bottom-left
                 baseUvs[1] = new Vector2(u1, v1); // bottom-right
                 baseUvs[2] = new Vector2(u1, v0); // top-right
@@ -173,6 +176,14 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
 
             result.mesh = mesh;
             return result;
+        }
+
+        private static int[][] CreateFaceCornerIndices()
+        {
+            var indices = new int[FaceNames.Length][];
+            for (int index = 0; index < FaceNames.Length; index++)
+                indices[index] = CoordinateConverter.GetFaceCornerIndices(FaceNames[index]);
+            return indices;
         }
 
         private static void AddQuad(List<int> triangles, int start, bool reverse)
