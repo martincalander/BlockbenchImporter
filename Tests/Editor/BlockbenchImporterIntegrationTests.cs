@@ -140,6 +140,33 @@ namespace MartinCalander.BlockbenchImporter.Tests
             }
         }
 
+        [TestCase(float.NaN)]
+        [TestCase(float.PositiveInfinity)]
+        [TestCase(float.NegativeInfinity)]
+        public void NonFiniteImportScaleIsRejectedWithoutChangingSettings(float value)
+        {
+            var importer = (BlockbenchImporter)AssetImporter.GetAtPath(AssetPath);
+            float original = importer.ImportScale;
+            Assert.Throws<System.ArgumentOutOfRangeException>(() => importer.ImportScale = value);
+            Assert.That(importer.ImportScale, Is.EqualTo(original));
+        }
+
+        [Test]
+        public void FailedHierarchyImportReleasesUnregisteredTexturesAndMaterials()
+        {
+            string name = "FailedImport_" + System.Guid.NewGuid().ToString("N");
+            string broken = Model.Replace("orange", name).Replace(
+                @"""uuid"":""cube""", @"""uuid"":""cube"",""children"":[""cube""]");
+            string path = Folder + "/Broken.bbmodel";
+            File.WriteAllText(path, broken);
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(
+                "Blockbench import failed: Cyclic child reference"));
+            AssetDatabase.ImportAsset(path,
+                ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            Assert.That(Resources.FindObjectsOfTypeAll<Texture2D>().Where(texture => texture.name == name), Is.Empty);
+            Assert.That(Resources.FindObjectsOfTypeAll<Material>().Where(material => material.name == name + "_Mat"), Is.Empty);
+        }
+
         [Test]
         public void Import_CreatesPrefabAndAllConfiguredSubAssets()
         {

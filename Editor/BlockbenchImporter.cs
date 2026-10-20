@@ -12,7 +12,7 @@ using UnityEngine.Serialization;
 
 namespace MartinCalander.BlockbenchImporter
 {
-    [ScriptedImporter(21, "bbmodel")]
+    [ScriptedImporter(22, "bbmodel")]
     public sealed class BlockbenchImporter : ScriptedImporter
     {
         [FormerlySerializedAs("unitsPerPixel")]
@@ -69,19 +69,31 @@ namespace MartinCalander.BlockbenchImporter
             get => importScale;
             set
             {
-                importScale = Mathf.Max(0.000001f, value);
+                importScale = ValidateImportScale(value);
                 EditorUtility.SetDirty(this);
             }
         }
 
+        private static float ValidateImportScale(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value))
+                throw new ArgumentOutOfRangeException(nameof(value), "Import scale must be finite.");
+            return Mathf.Max(0.000001f, value);
+        }
+
         public override void OnImportAsset(AssetImportContext context)
         {
+            MaterialBuilder materials = null;
+            HierarchyBuilder hierarchy = null;
+            GameObject root = null;
+            List<AnimationClip> clips = null;
+            AnimatorControllerResult controller = null;
             try
             {
                 BbModel model = BbModelParser.Parse(File.ReadAllText(context.assetPath));
                 var settings = new BlockbenchImporterSettings
                 {
-                    importScale = Mathf.Max(0.000001f, importScale),
+                    importScale = ValidateImportScale(importScale),
                     importTextures = importTextures,
                     importAnimations = importAnimations,
                     createAnimatorController = createAnimatorController,
@@ -98,12 +110,12 @@ namespace MartinCalander.BlockbenchImporter
 
                 RegisterTextureDependencies(context, model);
 
-                var materials = new MaterialBuilder(model, context.assetPath, settings);
+                materials = new MaterialBuilder(model, context.assetPath, settings);
                 materials.BuildTextures();
                 materials.BuildMaterials();
 
-                var hierarchy = new HierarchyBuilder(model, settings, materials);
-                GameObject root = hierarchy.BuildHierarchy();
+                hierarchy = new HierarchyBuilder(model, settings, materials);
+                root = hierarchy.BuildHierarchy();
                 foreach (string warning in model.warnings)
                     context.LogImportWarning(warning);
                 foreach (string warning in hierarchy.Warnings)
@@ -126,13 +138,13 @@ namespace MartinCalander.BlockbenchImporter
                 {
                     var animationBuilder = new AnimationBuilder(model, hierarchy.UuidToPath,
                         hierarchy.UuidToTransform, settings);
-                    List<AnimationClip> clips = animationBuilder.BuildAnimationClips();
+                    clips = animationBuilder.BuildAnimationClips();
                     foreach (AnimationClip clip in clips)
                         Add(context, identifiers, "animation_" + clip.name, clip);
 
                     if (clips.Count != 0 && settings.createAnimatorController)
                     {
-                        AnimatorControllerResult controller = animationBuilder.BuildAnimatorController(clips, context.assetPath);
+                        controller = animationBuilder.BuildAnimatorController(clips, context.assetPath);
                         if (controller != null)
                         {
                             Add(context, identifiers, "animator_controller", controller.controller);
@@ -147,6 +159,31 @@ namespace MartinCalander.BlockbenchImporter
             }
             catch (Exception exception)
             {
+                var registered = new List<UnityEngine.Object>();
+                context.GetObjects(registered);
+                var ownedByContext = new HashSet<UnityEngine.Object>(registered);
+                if (materials != null)
+                {
+                    foreach (Texture2D texture in materials.GetAllTextures()) Release(texture);
+                    foreach (Material material in materials.GetAllMaterials()) Release(material);
+                }
+                if (hierarchy != null)
+                    foreach (Mesh mesh in hierarchy.BuiltMeshes) Release(mesh);
+                if (clips != null)
+                    foreach (AnimationClip clip in clips) Release(clip);
+                if (controller != null)
+                {
+                    foreach (UnityEngine.Object child in controller.subAssets) Release(child);
+                    Release(controller.controller);
+                }
+                Release(root);
+
+                void Release(UnityEngine.Object value)
+                {
+                    if (value != null && !ownedByContext.Contains(value))
+                        UnityEngine.Object.DestroyImmediate(value);
+                }
+
                 context.LogImportError("Blockbench import failed: " + exception.Message + "\n" + exception.StackTrace);
             }
         }

@@ -42,13 +42,16 @@ namespace MartinCalander.BlockbenchImporter.Tests
 
             CubeMeshResult result = CubeMeshBuilder.BuildCubeMesh(cube, new[] { 16, 16 }, 1);
             Assert.That(result.mesh.vertexCount, Is.EqualTo(4));
+            Assert.That(result.mesh.indexFormat, Is.EqualTo(UnityEngine.Rendering.IndexFormat.UInt16));
             Assert.That(result.mesh.bounds.size.x, Is.EqualTo(8f).Within(0.0001f));
             Assert.That(result.mesh.bounds.size.y, Is.EqualTo(6f).Within(0.0001f));
             Object.DestroyImmediate(result.mesh);
         }
 
-        [Test]
-        public void CubeBuilder_RespectsUvRotationAndNullFaces()
+        [TestCase(90)]
+        [TestCase(-270)]
+        [TestCase(450)]
+        public void CubeBuilder_RespectsUvRotationAndNullFaces(int rotation)
         {
             var cube = new BbElement
             {
@@ -58,12 +61,13 @@ namespace MartinCalander.BlockbenchImporter.Tests
                 origin = new[] { 0f, 0f, 0f },
                 faces = new Dictionary<string, BbFace>
                 {
-                    ["north"] = new BbFace { uv = new[] { 0f, 0f, 8f, 4f }, rotation = 90, texture = 0 },
+                    ["north"] = new BbFace { uv = new[] { 0f, 0f, 8f, 4f }, rotation = rotation, texture = 0 },
                     ["south"] = new BbFace { enabled = false, texture = 0 }
                 }
             };
             CubeMeshResult result = CubeMeshBuilder.BuildCubeMesh(cube, new[] { 16, 16 }, 1);
             Assert.That(result.mesh.vertexCount, Is.EqualTo(4));
+            Assert.That(result.mesh.indexFormat, Is.EqualTo(UnityEngine.Rendering.IndexFormat.UInt16));
             Assert.That(result.mesh.uv[0], Is.EqualTo(new Vector2(0.5f, 0.75f)));
             int[] triangles = result.mesh.triangles;
             Vector3[] vertices = result.mesh.vertices;

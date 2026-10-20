@@ -54,8 +54,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             Vector3 localMin = from - origin;
             Vector3 localMax = to - origin;
 
-            // No axis conversion needed - Blockbench and Unity use same Y-up orientation
-            // Scale will be applied at the root GameObject level
+            // HierarchyBuilder bakes the import scale into the generated mesh.
             Vector3 min = Vector3.Min(localMin, localMax);
             Vector3 max = Vector3.Max(localMin, localMax);
 
@@ -106,6 +105,8 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
 
                 int texWidth = textureResolution != null && textureResolution.Length > 0 ? textureResolution[0] : 16;
                 int texHeight = textureResolution != null && textureResolution.Length > 1 ? textureResolution[1] : 16;
+                texWidth = Mathf.Max(1, texWidth);
+                texHeight = Mathf.Max(1, texHeight);
                 if (textures != null && textureIndex >= 0 && textureIndex < textures.Count)
                 {
                     texWidth = Mathf.Max(1, textures[textureIndex].uv_width);
@@ -132,7 +133,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                 baseUvs[3] = new Vector2(u0, v0); // top-left
 
                 // Apply UV rotation (in 90° steps)
-                int rotation = face.rotation / 90;
+                int rotation = ((face.rotation % 360) + 360) % 360 / 90;
                 for (int i = 0; i < 4; i++)
                 {
                     int rotatedIndex = (i + rotation) % 4;
@@ -149,9 +150,6 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             // Build mesh
             var mesh = new Mesh();
             mesh.name = element.name ?? "Cube";
-
-            // Use UInt32 index format to match glTF export
-            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 
             mesh.SetVertices(verticesList);
             mesh.SetNormals(normalsList);
@@ -255,12 +253,12 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             var mergedMesh = new Mesh();
             mergedMesh.name = "MergedMesh";
 
-            // Use UInt32 index format to match glTF export
-            mergedMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            if (vertices.Count > ushort.MaxValue)
+                mergedMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 
-            mergedMesh.vertices = vertices.ToArray();
-            mergedMesh.normals = normals.ToArray();
-            mergedMesh.uv = uvs.ToArray();
+            mergedMesh.SetVertices(vertices);
+            mergedMesh.SetNormals(normals);
+            mergedMesh.SetUVs(0, uvs);
 
             mergedMesh.subMeshCount = sortedTexIndices.Count;
             var resultTexIndices = new int[sortedTexIndices.Count];
@@ -268,7 +266,7 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             for (int i = 0; i < sortedTexIndices.Count; i++)
             {
                 int texIdx = sortedTexIndices[i];
-                mergedMesh.SetTriangles(trianglesByTexture[texIdx].ToArray(), i);
+                mergedMesh.SetTriangles(trianglesByTexture[texIdx], i, false);
                 resultTexIndices[i] = texIdx;
             }
 

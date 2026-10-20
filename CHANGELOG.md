@@ -6,6 +6,8 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 
 ### Changed
 
+- Use 16-bit index buffers for small meshes, avoid temporary arrays when merging meshes, and collect rest-pose metadata once for each animation build.
+- Parse ordinary JSON strings without temporary character buffers and remove redundant triangulation loop counters.
 - Renamed the package ID to `com.martincalander.blockbenchimporter` and public namespaces and assembly names to `MartinCalander.BlockbenchImporter`.
 - Replaced custom README artwork with the standard Blockbench and Unity logos.
 - Replaced the root package icon with Blockbench's standard application icon.
@@ -26,6 +28,11 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 
 ### Fixed
 
+- Reject malformed JSON, excessive nesting, cyclic child references, and geometry numbers outside the finite float range with clear import errors. Import Scale also rejects NaN and infinity.
+- Preserve inline groups without UUIDs and ignore repeated outliner references with a warning to prevent duplicate hierarchy expansion.
+- Release generated objects when an import fails before Unity takes ownership of them.
+- Normalize negative cube UV rotations and nonpositive texture dimensions, and omit unused material slots from discarded mesh faces.
+- Treat non-finite animation values like unsupported expressions, with a warning and a zero value.
 - Stopped empty and unsupported animations from leaving unregistered animation clips in memory.
 - Corrected mixed-axis rotations, polygon front faces, nested armature pivots, rotated cube rescaling, and mirrored billboard textures.
 - Preserved animation duration, split keyframe values, stepped rotations, independent Bezier handles, Catmull-Rom overshoot, and global rotations under animated parents.

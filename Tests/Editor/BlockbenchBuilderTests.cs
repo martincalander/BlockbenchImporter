@@ -6,6 +6,7 @@ using MartinCalander.BlockbenchImporter.Builders;
 using MartinCalander.BlockbenchImporter.Model;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEngine;
 using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
@@ -14,6 +15,54 @@ namespace MartinCalander.BlockbenchImporter.Tests
 {
     public sealed class BlockbenchBuilderTests
     {
+        [Test]
+        public void FailedAnimationBatchReleasesEarlierClips()
+        {
+            string name = "FailedClipBatch_" + Guid.NewGuid().ToString("N");
+            var animator = new BbAnimator();
+            animator.keyframes.Add(new BbKeyframe { channel = "position" });
+            var animation = new BbAnimation { name = name };
+            animation.animators["target"] = animator;
+            var model = new BbModel();
+            model.animations.Add(animation);
+            model.animations.Add(null);
+            Assert.Throws<NullReferenceException>(() => CreateAnimationBuilder(model).BuildAnimationClips());
+            Assert.That(Resources.FindObjectsOfTypeAll<AnimationClip>().Where(clip => clip.name == name), Is.Empty);
+        }
+
+        [Test]
+        public void FailedClipConstructionReleasesItsNativeClip()
+        {
+            string name = "FailedClip_" + Guid.NewGuid().ToString("N");
+            var animator = new BbAnimator();
+            animator.keyframes.Add(new BbKeyframe { channel = "position" });
+            var animation = new BbAnimation { name = name };
+            animation.animators["target"] = animator;
+            var model = new BbModel();
+            model.animations.Add(animation);
+            var builder = new AnimationBuilder(model,
+                new Dictionary<string, string> { ["target"] = "target" },
+                new Dictionary<string, Transform>(), null);
+            Assert.Throws<NullReferenceException>(() => builder.BuildAnimationClips());
+            Assert.That(Resources.FindObjectsOfTypeAll<AnimationClip>().Where(clip => clip.name == name), Is.Empty);
+        }
+
+        [Test]
+        public void FailedControllerConstructionReleasesOwnedObjectsAndKeepsInputClips()
+        {
+            var clip = new AnimationClip { name = "ControllerInput_" + Guid.NewGuid().ToString("N") };
+            var existing = new HashSet<Object>(Resources.FindObjectsOfTypeAll<Object>());
+            try
+            {
+                Assert.Throws<NullReferenceException>(() => CreateAnimationBuilder(new BbModel())
+                    .BuildAnimatorController(new List<AnimationClip> { clip, null }, "Assets/Failure.bbmodel"));
+                Assert.That(clip != null, Is.True, "The caller still owns its input clips.");
+                Assert.That(Resources.FindObjectsOfTypeAll<Object>().Where(value => !existing.Contains(value) &&
+                    (value is AnimatorController || value is AnimatorStateMachine || value is AnimatorState)), Is.Empty);
+            }
+            finally { Object.DestroyImmediate(clip); }
+        }
+
         [TestCase("position", "m_LocalPosition.x", -0.5f)]
         [TestCase("scale", "m_LocalScale.x", 1f)]
         public void BezierCurvesPreserveValuesTangentsAndWeights(string channel, string property, float scale)

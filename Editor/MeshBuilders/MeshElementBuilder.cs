@@ -28,6 +28,9 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             int texWidth = textureResolution != null && textureResolution.Length > 0 ? textureResolution[0] : 16;
             int texHeight = textureResolution != null && textureResolution.Length > 1 ? textureResolution[1] : 16;
 
+            texWidth = Mathf.Max(1, texWidth);
+            texHeight = Mathf.Max(1, texHeight);
+
             // Build lookup for vertices
             // NOTE: For mesh elements, vertices are ALREADY stored in local space relative to origin
             // (unlike cube elements where from/to are in world coordinates)
@@ -65,11 +68,6 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
 
                 int textureIndex = face.texture;
                 int submeshKey = textureIndex < 0 ? -1 - Mathf.Abs(element.color % 10) : textureIndex;
-                if (!trianglesByTexture.TryGetValue(submeshKey, out List<int> submeshTriangles))
-                {
-                    submeshTriangles = new List<int>();
-                    trianglesByTexture[submeshKey] = submeshTriangles;
-                }
 
                 // Get vertices for this face
                 int faceTexWidth = texWidth;
@@ -112,6 +110,12 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                 EarClipTriangulate(faceVerts, normal, triangles, projectedPoints, faceIndices);
                 EnsureWindingMatchesNormal(triangles, faceVerts, normal);
 
+                if (!trianglesByTexture.TryGetValue(submeshKey, out List<int> submeshTriangles))
+                {
+                    submeshTriangles = new List<int>();
+                    trianglesByTexture[submeshKey] = submeshTriangles;
+                }
+
                 // Add vertices and triangles
                 int baseVertex = verticesList.Count;
 
@@ -136,8 +140,8 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
             var mesh = new Mesh();
             mesh.name = element.name ?? "MeshElement";
 
-            // Use UInt32 index format to match glTF export
-            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            if (verticesList.Count > ushort.MaxValue)
+                mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 
             mesh.SetVertices(verticesList);
             mesh.SetNormals(normalsList);
@@ -269,10 +273,9 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                 indices.Add(i);
 
             // Ear clipping
-            int safetyCounter = indices.Count * indices.Count;
-            while (indices.Count > 3 && safetyCounter > 0)
+            // Each successful pass removes an index; a failed pass exits below.
+            while (indices.Count > 3)
             {
-                safetyCounter--;
                 bool earFound = false;
 
                 for (int i = 0; i < indices.Count; i++)

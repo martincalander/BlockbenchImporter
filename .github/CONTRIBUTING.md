@@ -50,3 +50,43 @@ If a `.bbmodel` fixture is necessary, strip it down to the problem and make sure
 Keep the pull request focused and explain how Blockbench stores the data you changed. A commit subject like `Fix rotated north-face UVs` is more helpful than `Update importer`.
 
 Contributions are submitted under the [Apache License 2.0](../LICENSE.md).
+
+## Package audit verification on 2026-10-20
+
+The local working tree based on `ec6675c` was audited across all 107 tracked
+paths: Editor and runtime code, shaders, tests, sample assets, metadata,
+documentation, and packaging workflows. The changes tighten malformed-input
+handling, release objects after failed imports, reduce mesh index memory and
+temporary allocations, and share rest-pose preparation across animation clips.
+The importer revision is 22, so Unity reimports existing models.
+
+Verification used Unity CLI `1.0.0-beta.13` on macOS ARM64:
+
+| Editor | Importer tests passed | Skipped | Failed |
+| --- | ---: | ---: | ---: |
+| `7000.0.0a11` | 136 | 0 | 0 |
+| `6000.7.0b2` | 134 | 2 | 0 |
+| `6000.5.5f1` | 134 | 2 | 0 |
+
+All three Editors compiled the package without C# warnings or errors. The
+Unity 7 run used Pipeline `0.8.0-exp.1`; the isolated Unity 6 projects used
+one-shot CLI tests. All used Test Framework `1.9.0`. Every Editor launch used
+`-automated`. The final runs had a graphics device and exercised both bundled
+shaders. The two Unity 6 skips are the URP material cases because those minimal
+projects do not install URP; both cases passed in the Unity 7 workspace.
+
+Coverage includes malformed and truncated JSON, escaped Unicode, numeric
+limits, depth limits, cyclic and repeated hierarchy references, failure cleanup
+for textures/materials/clips/controllers, small and large mesh index formats,
+large degenerate polygons, UV edge cases, stable reimports, and Play mode with
+domain reload disabled. The initial headless run skipped rendering assertions;
+the final graphics-enabled run covered them successfully.
+
+Package validation, changed-document Markdown lint, metadata checks, GitHub
+Actions syntax checks, package dry run, and whitespace checks passed. Existing
+GUIDs, runtime code, shaders, dependencies, and public helper APIs remain intact.
+
+Not tested: Unity `2021.3` or other Editor versions beyond the three listed,
+Windows, Linux, player builds, signed release artifacts, and hosted CI. These
+are local working-tree checks, not release evidence for another commit,
+platform, Editor version, or package archive.

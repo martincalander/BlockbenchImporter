@@ -41,4 +41,6 @@ Groups and their ordinary child pivots begin in shared model space. Armatures ar
 
 The importer warns instead of dropping data without a word. If it can keep a useful named transform, it does. The warning should point to the item that needs attention.
 
+Malformed JSON, cyclic child references, non-finite geometry values, and nesting beyond 128 levels fail the import with an error. Repeated outliner references keep their first occurrence and produce a warning. Non-finite animation values use the same zero fallback as unsupported expressions.
+
 If something marked **Yes** imports incorrectly, please send the smallest `.bbmodel` that reproduces it, screenshots from Blockbench and Unity, the package and Unity versions, your render pipeline, and the import settings you changed.

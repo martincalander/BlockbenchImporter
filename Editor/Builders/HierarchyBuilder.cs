@@ -34,10 +34,19 @@ namespace MartinCalander.BlockbenchImporter.Builders
 
         public GameObject BuildHierarchy()
         {
+            List<OutlinerNode> nodes = BbModelParser.BuildHierarchy(model);
             var root = new GameObject(BlockbenchImporter.Sanitize(model.name ?? "Blockbench Model"));
-            BuildChildren(BbModelParser.BuildHierarchy(model), root.transform, string.Empty, Vector3.zero);
-            BuildArmatures();
-            return root;
+            try
+            {
+                BuildChildren(nodes, root.transform, string.Empty, Vector3.zero);
+                BuildArmatures();
+                return root;
+            }
+            catch
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+                throw;
+            }
         }
 
         private void BuildChildren(IReadOnlyList<OutlinerNode> nodes, Transform parent, string parentPath,
@@ -148,14 +157,14 @@ namespace MartinCalander.BlockbenchImporter.Builders
 
             if (result != null && result.mesh != null)
             {
+                meshes.Add(result.mesh);
                 ApplyImportScale(result.mesh);
                 result.mesh.name = name;
-                meshes.Add(result.mesh);
                 gameObject.AddComponent<MeshFilter>().sharedMesh = result.mesh;
                 gameObject.AddComponent<MeshRenderer>().sharedMaterials = materials.GetMaterialsForSubmeshes(result.textureIndices);
             }
             if (!string.IsNullOrEmpty(element.uuid))
-                builtElements[element.uuid] = new BuiltElement(element, gameObject, result);
+                builtElements[element.uuid] = new BuiltElement(gameObject, result);
             if (node.children.Count != 0)
                 BuildChildren(node.children, gameObject.transform, path, Vector3.zero);
         }
@@ -180,12 +189,13 @@ namespace MartinCalander.BlockbenchImporter.Builders
         {
             foreach (BbElement armature in model.elements)
             {
-                if (armature.type != "armature" || !builtElements.TryGetValue(armature.uuid, out BuiltElement builtArmature))
+                if (armature.type != "armature" || string.IsNullOrEmpty(armature.uuid) ||
+                    !builtElements.TryGetValue(armature.uuid, out BuiltElement builtArmature))
                     continue;
                 var boneElements = new List<BbElement>();
-                CollectChildrenOfType(armature, "armature_bone", boneElements, true);
+                CollectChildrenOfType(armature, "armature_bone", boneElements, true, new HashSet<string>());
                 var meshElements = new List<BbElement>();
-                CollectChildrenOfType(armature, "mesh", meshElements, false);
+                CollectChildrenOfType(armature, "mesh", meshElements, false, new HashSet<string>());
                 if (boneElements.Count == 0) continue;
 
                 List<BbElement> activeBones = boneElements
@@ -251,14 +261,26 @@ namespace MartinCalander.BlockbenchImporter.Builders
             }
         }
 
-        private void CollectChildrenOfType(BbElement parent, string type, List<BbElement> result, bool recursive)
+        private void CollectChildrenOfType(BbElement parent, string type, List<BbElement> result, bool recursive,
+            HashSet<string> visited)
         {
-            foreach (object childReference in parent.children)
+            var pending = new Stack<BbElement>();
+            PushChildren(parent);
+            while (pending.Count != 0)
             {
-                if (!(childReference is string uuid) || !model.elementsByUuid.TryGetValue(uuid, out BbElement child))
-                    continue;
+                BbElement child = pending.Pop();
+                if (!visited.Add(child.uuid)) continue;
                 if (child.type == type) result.Add(child);
-                if (recursive && child.children != null) CollectChildrenOfType(child, type, result, true);
+                if (recursive) PushChildren(child);
+            }
+
+            void PushChildren(BbElement element)
+            {
+                if (element.children == null) return;
+                for (int index = element.children.Count - 1; index >= 0; index--)
+                    if (element.children[index] is string uuid &&
+                        model.elementsByUuid.TryGetValue(uuid, out BbElement child))
+                        pending.Push(child);
             }
         }
 
@@ -307,13 +329,11 @@ namespace MartinCalander.BlockbenchImporter.Builders
 
         private sealed class BuiltElement
         {
-            public readonly BbElement element;
             public readonly GameObject gameObject;
             public readonly CubeMeshResult result;
 
-            public BuiltElement(BbElement element, GameObject gameObject, CubeMeshResult result)
+            public BuiltElement(GameObject gameObject, CubeMeshResult result)
             {
-                this.element = element;
                 this.gameObject = gameObject;
                 this.result = result;
             }

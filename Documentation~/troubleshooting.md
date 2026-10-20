@@ -33,6 +33,12 @@ Try **Unlit** first. Unity lighting, color space, tone mapping, fog, post-proces
 
 Also check alpha mode and billboard mode.
 
+## The importer reports invalid model data
+
+The Console identifies malformed JSON, cyclic child references, excessive nesting, or geometry values that cannot be represented as finite Unity coordinates. JSON nesting and hierarchy depth are limited to 128 levels. Open the model in Blockbench, correct the affected data, and save it again.
+
+A duplicate outliner reference is imported once and produces a warning. Inline groups without UUIDs remain in the hierarchy, but cannot be animation targets without an identifier.
+
 ## Molang or unknown-element warnings
 
 The importer does not run expressions from asset files. Bake expression-driven animation to numeric keyframes in Blockbench. Unknown plugin geometry needs a dedicated importer implementation before Unity can render it.

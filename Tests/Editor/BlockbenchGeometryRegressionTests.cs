@@ -6,12 +6,112 @@ using MartinCalander.BlockbenchImporter.Utils;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
 
 namespace MartinCalander.BlockbenchImporter.Tests
 {
     public sealed class BlockbenchGeometryRegressionTests
     {
+        [Test]
+        public void LargeDegeneratePolygonStillRunsTheTriangulationFallback()
+        {
+            const int count = 46341;
+            var vertices = new List<Vector3>(count);
+            for (int index = 0; index < count; index++) vertices.Add(new Vector3(index, 0f, 0f));
+            LogAssert.Expect(LogType.Warning, "Ear clipping failed, falling back to fan triangulation");
+            List<int> triangles = MeshElementBuilder.EarClipTriangulate(vertices, Vector3.forward);
+            Assert.That(triangles.Count, Is.EqualTo((count - 2) * 3));
+            Assert.That(triangles[triangles.Count - 2], Is.EqualTo(count - 1));
+        }
+
+        [TestCase(3, UnityEngine.Rendering.IndexFormat.UInt16)]
+        [TestCase(32769, UnityEngine.Rendering.IndexFormat.UInt32)]
+        public void MergedMeshesChooseIndexFormatWithoutChangingSourceMeshes(int count,
+            UnityEngine.Rendering.IndexFormat expected)
+        {
+            var source = new Mesh
+            {
+                vertices = new Vector3[count], normals = new Vector3[count], uv = new Vector2[count],
+                triangles = new[] { 0, 1, count - 1 }
+            };
+            var part = new CubeMeshResult { mesh = source, textureIndices = new[] { 2 } };
+            CubeMeshResult result = null;
+            try
+            {
+                result = CubeMeshBuilder.MergeMeshes(new List<CubeMeshResult> { part, part });
+                Assert.That(result.mesh.indexFormat, Is.EqualTo(expected));
+                Assert.That(result.mesh.vertexCount, Is.EqualTo(count * 2));
+                Assert.That(result.textureIndices, Is.EqualTo(new[] { 2 }));
+                Assert.That(result.mesh.triangles, Is.EqualTo(new[] { 0, 1, count - 1, count, count + 1, count * 2 - 1 }));
+                Assert.That(source.vertexCount, Is.EqualTo(count));
+                Assert.That(source.triangles, Is.EqualTo(new[] { 0, 1, count - 1 }));
+            }
+            finally
+            {
+                if (result != null) Object.DestroyImmediate(result.mesh);
+                Object.DestroyImmediate(source);
+            }
+        }
+
+        [TestCase(1, UnityEngine.Rendering.IndexFormat.UInt16)]
+        [TestCase(21846, UnityEngine.Rendering.IndexFormat.UInt32)]
+        public void MeshIndexFormatFitsTheGeneratedVertexCount(int faceCount, UnityEngine.Rendering.IndexFormat expected)
+        {
+            var element = Polygon(new[]
+            {
+                new[] { 0f, 0f, 0f }, new[] { 1f, 0f, 0f }, new[] { 0f, 1f, 0f }
+            });
+            BbMeshFace face = element.meshFaces["face"];
+            for (int index = 1; index < faceCount; index++) element.meshFaces[index.ToString()] = face;
+            CubeMeshResult result = MeshElementBuilder.BuildMeshElement(element, new[] { 16, 16 }, 0);
+            try
+            {
+                Assert.That(result.mesh.indexFormat, Is.EqualTo(expected));
+                Assert.That(result.mesh.vertexCount, Is.EqualTo(faceCount * 3));
+                Assert.That(result.mesh.triangles.Length, Is.EqualTo(faceCount * 3));
+                Assert.That(result.mesh.triangles[result.mesh.triangles.Length - 1], Is.LessThan(result.mesh.vertexCount));
+            }
+            finally { Object.DestroyImmediate(result.mesh); }
+        }
+
+        [Test]
+        public void InvalidMeshFacesDoNotRetainUnusedMaterialSlots()
+        {
+            var element = Polygon(new[]
+            {
+                new[] { 0f, 0f, 0f }, new[] { 1f, 0f, 0f }, new[] { 0f, 1f, 0f }
+            });
+            element.meshFaces["missing"] = new BbMeshFace
+            {
+                texture = 5, vertices = new List<string> { "0", "missing", "1" }
+            };
+            CubeMeshResult result = MeshElementBuilder.BuildMeshElement(element, new[] { 16, 16 }, 6);
+            try
+            {
+                Assert.That(result.textureIndices, Is.EqualTo(new[] { -1 }));
+                Assert.That(result.mesh.subMeshCount, Is.EqualTo(1));
+            }
+            finally { Object.DestroyImmediate(result.mesh); }
+        }
+
+        [TestCase(0)]
+        [TestCase(-16)]
+        public void NonPositiveModelResolutionProducesFiniteUvs(int resolution)
+        {
+            var element = Polygon(new[]
+            {
+                new[] { 0f, 0f, 0f }, new[] { 1f, 0f, 0f }, new[] { 0f, 1f, 0f }
+            });
+            element.meshFaces["face"].uv["0"] = new[] { 1f, 1f };
+            CubeMeshResult result = MeshElementBuilder.BuildMeshElement(element, new[] { resolution, resolution }, 0);
+            try
+            {
+                Assert.That(result.mesh.uv[0], Is.EqualTo(new Vector2(1f, 0f)));
+            }
+            finally { Object.DestroyImmediate(result.mesh); }
+        }
+
         [Test]
         public void RotationUsesBlockbenchZyxOrderBeforeReflectingCoordinates()
         {

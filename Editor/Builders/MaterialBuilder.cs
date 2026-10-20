@@ -148,20 +148,28 @@ namespace MartinCalander.BlockbenchImporter.Builders
             }
 
             var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-            texture.name = SanitizeName(texDef.name ?? $"Texture_{index}");
-
-            if (!texture.LoadImage(imageData))
+            try
             {
-                Debug.LogError($"Failed to decode image data for texture: {texture.name}");
-                UnityEngine.Object.DestroyImmediate(texture);
-                return null;
+                texture.name = SanitizeName(texDef.name ?? $"Texture_{index}");
+
+                if (!texture.LoadImage(imageData))
+                {
+                    Debug.LogError($"Failed to decode image data for texture: {texture.name}");
+                    UnityEngine.Object.DestroyImmediate(texture);
+                    return null;
+                }
+
+                // Apply pixel art settings
+                texture.filterMode = settings.textureFilter;
+                texture.wrapMode = settings.textureWrap;
+
+                return texture;
             }
-
-            // Apply pixel art settings
-            texture.filterMode = settings.textureFilter;
-            texture.wrapMode = settings.textureWrap;
-
-            return texture;
+            catch
+            {
+                UnityEngine.Object.DestroyImmediate(texture);
+                throw;
+            }
         }
 
         private byte[] DecodeBase64Image(string dataUri)
@@ -215,31 +223,47 @@ namespace MartinCalander.BlockbenchImporter.Builders
         {
             Shader shader = GetShader();
             var material = new Material(shader);
-            material.name = texture.name + "_Mat";
+            try
+            {
+                material.name = texture.name + "_Mat";
 
-            // Set main texture
-            material.mainTexture = texture;
+                // Set main texture
+                material.mainTexture = texture;
 
-            // Determine if we need alpha clipping
-            bool needsAlphaClip = settings.alphaMode == BlockbenchAlphaMode.Cutout ||
-                                  (settings.alphaMode == BlockbenchAlphaMode.Auto && HasTransparency(texture));
-            CullMode cullMode = texDef.render_sides == "back" ? CullMode.Front :
-                texDef.render_sides == "double" || texDef.render_sides == "auto" ? CullMode.Off : CullMode.Back;
+                // Determine if we need alpha clipping
+                bool needsAlphaClip = settings.alphaMode == BlockbenchAlphaMode.Cutout ||
+                                      (settings.alphaMode == BlockbenchAlphaMode.Auto && HasTransparency(texture));
+                CullMode cullMode = texDef.render_sides == "back" ? CullMode.Front :
+                    texDef.render_sides == "double" || texDef.render_sides == "auto" ? CullMode.Off : CullMode.Back;
 
-            // Configure material based on render pipeline
-            ConfigureMaterial(material, needsAlphaClip, cullMode);
+                // Configure material based on render pipeline
+                ConfigureMaterial(material, needsAlphaClip, cullMode);
 
-            return material;
+                return material;
+            }
+            catch
+            {
+                UnityEngine.Object.DestroyImmediate(material);
+                throw;
+            }
         }
 
         private Material CreateDefaultMaterial(int colorIndex)
         {
             Shader shader = GetShader();
             var material = new Material(shader);
-            material.name = "Untextured_" + colorIndex;
-            material.color = MarkerColors[colorIndex];
-            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", MarkerColors[colorIndex]);
-            return material;
+            try
+            {
+                material.name = "Untextured_" + colorIndex;
+                material.color = MarkerColors[colorIndex];
+                if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", MarkerColors[colorIndex]);
+                return material;
+            }
+            catch
+            {
+                UnityEngine.Object.DestroyImmediate(material);
+                throw;
+            }
         }
 
         private static Color Html(string value)

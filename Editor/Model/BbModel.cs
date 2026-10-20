@@ -252,7 +252,8 @@ namespace MartinCalander.BlockbenchImporter.Model
         {
             if (string.IsNullOrEmpty(s)) return 0f;
             if (float.TryParse(s, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out float result))
+                System.Globalization.CultureInfo.InvariantCulture, out float result) &&
+                !float.IsNaN(result) && !float.IsInfinity(result))
                 return result;
             return 0f;
         }

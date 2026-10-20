@@ -8,7 +8,7 @@ namespace MartinCalander.BlockbenchImporter.Parsing
 {
     /// <summary>
     /// Tolerant JSON parser for Blockbench .bbmodel files.
-    /// Uses Unity's JsonUtility with manual parsing for complex structures.
+    /// Reads JSON separately from the tolerant model-field conversion.
     /// </summary>
     public static class BbModelParser
     {
@@ -22,7 +22,6 @@ namespace MartinCalander.BlockbenchImporter.Parsing
 
             var model = new BbModel();
 
-            // Parse using SimpleJSON-like manual approach for complex nested structures
             var root = MiniJson.Deserialize(json) as Dictionary<string, object>;
             if (root == null)
                 throw new FormatException("Failed to parse JSON root as dictionary");
@@ -163,8 +162,8 @@ namespace MartinCalander.BlockbenchImporter.Parsing
 
         private static bool IsNumeric(string value)
         {
-            return string.IsNullOrEmpty(value) || float.TryParse(value, NumberStyles.Float,
-                CultureInfo.InvariantCulture, out _);
+            return string.IsNullOrEmpty(value) || (float.TryParse(value, NumberStyles.Float,
+                CultureInfo.InvariantCulture, out float number) && !float.IsNaN(number) && !float.IsInfinity(number));
         }
 
         private static void ConvertLegacyAnimationAxes(BbModel model)
@@ -505,9 +504,8 @@ namespace MartinCalander.BlockbenchImporter.Parsing
         public static List<OutlinerNode> BuildHierarchy(BbModel model)
         {
             var result = new List<OutlinerNode>();
-            BuildHierarchyRecursive(model.outliner, model, result);
             var referenced = new HashSet<string>();
-            CollectUuids(result, referenced);
+            BuildHierarchyRecursive(model.outliner, model, result, referenced, new HashSet<string>(), 0);
             foreach (BbElement element in model.elements)
             {
                 if (string.IsNullOrEmpty(element.uuid) || referenced.Contains(element.uuid)) continue;
@@ -518,17 +516,11 @@ namespace MartinCalander.BlockbenchImporter.Parsing
             return result;
         }
 
-        private static void CollectUuids(IEnumerable<OutlinerNode> nodes, HashSet<string> result)
+        private static void BuildHierarchyRecursive(List<object> items, BbModel model, List<OutlinerNode> result,
+            HashSet<string> referenced, HashSet<string> ancestors, int depth)
         {
-            foreach (OutlinerNode node in nodes)
-            {
-                if (!string.IsNullOrEmpty(node.uuid)) result.Add(node.uuid);
-                CollectUuids(node.children, result);
-            }
-        }
-
-        private static void BuildHierarchyRecursive(List<object> items, BbModel model, List<OutlinerNode> result)
-        {
+            if (depth >= 128 && items.Count != 0)
+                throw new FormatException("The Blockbench hierarchy exceeds 128 levels.");
             foreach (var item in items)
             {
                 if (item is string uuid)
@@ -536,6 +528,14 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                     // This is an element reference
                     if (model.elementsByUuid.TryGetValue(uuid, out var element))
                     {
+                        if (!ancestors.Add(uuid))
+                            throw new FormatException("Cyclic child reference to element '" + uuid + "'.");
+                        if (!referenced.Add(uuid))
+                        {
+                            ancestors.Remove(uuid);
+                            model.warnings.Add("Duplicate outliner reference to element '" + uuid + "' was ignored.");
+                            continue;
+                        }
                         var node = new OutlinerNode
                         {
                             isGroup = false,
@@ -543,7 +543,8 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                             element = element
                         };
                         if (element.children != null && element.children.Count != 0)
-                            BuildHierarchyRecursive(element.children, model, node.children);
+                            BuildHierarchyRecursive(element.children, model, node.children, referenced, ancestors, depth + 1);
+                        ancestors.Remove(uuid);
                         result.Add(node);
                     }
                 }
@@ -551,9 +552,14 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 {
                     // This is a group definition inline in outliner
                     var groupUuid = GetString(groupDict, "uuid");
-                    var group = model.groupsByUuid.ContainsKey(groupUuid)
-                        ? model.groupsByUuid[groupUuid]
-                        : ParseGroup(groupDict);
+                    if (!string.IsNullOrEmpty(groupUuid) && !referenced.Add(groupUuid))
+                    {
+                        model.warnings.Add("Duplicate outliner reference to group '" + groupUuid + "' was ignored.");
+                        continue;
+                    }
+                    var group = !string.IsNullOrEmpty(groupUuid) &&
+                        model.groupsByUuid.TryGetValue(groupUuid, out BbGroup savedGroup)
+                        ? savedGroup : ParseGroup(groupDict);
 
                     var node = new OutlinerNode
                     {
@@ -565,7 +571,7 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                     // Recursively process children
                     if (groupDict.TryGetValue("children", out var childrenObj) && childrenObj is List<object> children)
                     {
-                        BuildHierarchyRecursive(children, model, node.children);
+                        BuildHierarchyRecursive(children, model, node.children, referenced, ancestors, depth + 1);
                     }
 
                     result.Add(node);
@@ -630,24 +636,20 @@ namespace MartinCalander.BlockbenchImporter.Parsing
 
         private static float GetFloat(Dictionary<string, object> dict, string key, float defaultValue = 0f)
         {
-            if (dict.TryGetValue(key, out var value))
-            {
-                if (value is double d) return (float)d;
-                if (value is long l) return l;
-                if (value is float f) return f;
-                if (float.TryParse(value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out float result))
-                    return result;
-            }
-            return defaultValue;
+            return dict.TryGetValue(key, out object value) ? ConvertToFloat(value, defaultValue) : defaultValue;
         }
 
-        private static float ConvertToFloat(object value)
+        private static float ConvertToFloat(object value, float defaultValue = 0f)
         {
-            if (value is double d) return (float)d;
-            if (value is long l) return l;
-            if (value is float f) return f;
-            return float.TryParse(value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture,
-                out float result) ? result : 0f;
+            float result;
+            if (value is double number) result = (float)number;
+            else if (value is long whole) result = whole;
+            else if (value is float single) result = single;
+            else if (!float.TryParse(value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out result))
+                return defaultValue;
+            if (float.IsNaN(result) || float.IsInfinity(result))
+                throw new FormatException("A model number is outside the finite single-precision range.");
+            return result;
         }
 
         private static float[] GetFloatArray(Dictionary<string, object> dict, string key, float[] defaultValue)
@@ -664,11 +666,7 @@ namespace MartinCalander.BlockbenchImporter.Parsing
             var result = new float[list.Count];
             for (int i = 0; i < list.Count; i++)
             {
-                if (list[i] is double d) result[i] = (float)d;
-                else if (list[i] is long l) result[i] = l;
-                else if (list[i] is float f) result[i] = f;
-                else if (float.TryParse(list[i]?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out float val))
-                    result[i] = val;
+                result[i] = ConvertToFloat(list[i]);
             }
             return result;
         }

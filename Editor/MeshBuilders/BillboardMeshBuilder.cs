@@ -23,6 +23,8 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
 
             int textureWidth = modelResolution != null && modelResolution.Length > 0 ? modelResolution[0] : 16;
             int textureHeight = modelResolution != null && modelResolution.Length > 1 ? modelResolution[1] : 16;
+            textureWidth = Mathf.Max(1, textureWidth);
+            textureHeight = Mathf.Max(1, textureHeight);
             if (face.texture >= 0 && textures != null && face.texture < textures.Count)
             {
                 textureWidth = Mathf.Max(1, textures[face.texture].uv_width);

@@ -25,347 +25,200 @@ namespace MartinCalander.BlockbenchImporter.Parsing
             return Serializer.Serialize(obj);
         }
 
-        sealed class Parser : IDisposable
+        sealed class Parser
         {
-            const string WORD_BREAK = "{}[],:\"";
+            private const int MaximumDepth = 128;
+            private readonly string json;
+            private int position;
 
-            StringReader json;
-
-            Parser(string jsonString)
+            private Parser(string json)
             {
-                json = new StringReader(jsonString);
+                this.json = json;
             }
 
-            public static object Parse(string jsonString)
+            public static object Parse(string json)
             {
-                using (var instance = new Parser(jsonString))
+                var parser = new Parser(json);
+                object value = parser.ParseValue(0);
+                parser.EatWhitespace();
+                if (parser.position != json.Length)
+                    throw parser.Invalid("Unexpected content after the root value");
+                return value;
+            }
+
+            private object ParseValue(int depth)
+            {
+                EatWhitespace();
+                if (position == json.Length)
+                    throw Invalid("Expected a JSON value");
+
+                char token = json[position];
+                if (token == '{' || token == '[')
                 {
-                    return instance.ParseValue();
+                    if (depth >= MaximumDepth)
+                        throw Invalid("JSON nesting exceeds " + MaximumDepth + " levels");
+                    return token == '{' ? (object)ParseObject(depth + 1) : ParseArray(depth + 1);
                 }
-            }
-
-            public void Dispose()
-            {
-                json = null;
-            }
-
-            Dictionary<string, object> ParseObject()
-            {
-                var table = new Dictionary<string, object>();
-
-                // Skip '{'
-                json.Read();
-
-                while (true)
-                {
-                    switch (NextToken)
-                    {
-                        case TOKEN.NONE:
-                            return null;
-                        case TOKEN.COMMA:
-                            continue;
-                        case TOKEN.CURLY_CLOSE:
-                            return table;
-                        default:
-                            // Name
-                            string name = ParseString();
-                            if (name == null)
-                                return null;
-
-                            // :
-                            if (NextToken != TOKEN.COLON)
-                                return null;
-
-                            // Value
-                            table[name] = ParseValue();
-                            break;
-                    }
-                }
-            }
-
-            List<object> ParseArray()
-            {
-                var array = new List<object>();
-
-                // Skip '['
-                json.Read();
-
-                var parsing = true;
-                while (parsing)
-                {
-                    TOKEN nextToken = NextToken;
-
-                    switch (nextToken)
-                    {
-                        case TOKEN.NONE:
-                            return null;
-                        case TOKEN.COMMA:
-                            continue;
-                        case TOKEN.SQUARED_CLOSE:
-                            parsing = false;
-                            break;
-                        default:
-                            object value = ParseByToken(nextToken);
-                            array.Add(value);
-                            break;
-                    }
-                }
-
-                return array;
-            }
-
-            object ParseValue()
-            {
-                TOKEN nextToken = NextToken;
-                return ParseByToken(nextToken);
-            }
-
-            object ParseByToken(TOKEN token)
-            {
                 switch (token)
                 {
-                    case TOKEN.STRING:
-                        return ParseString();
-                    case TOKEN.NUMBER:
-                        return ParseNumber();
-                    case TOKEN.CURLY_OPEN:
-                        return ParseObject();
-                    case TOKEN.SQUARED_OPEN:
-                        return ParseArray();
-                    case TOKEN.TRUE:
-                        return true;
-                    case TOKEN.FALSE:
-                        return false;
-                    case TOKEN.NULL:
-                        return null;
+                    case '"': return ParseString();
+                    case 't': ReadLiteral("true"); return true;
+                    case 'f': ReadLiteral("false"); return false;
+                    case 'n': ReadLiteral("null"); return null;
                     default:
-                        return null;
+                        if (token == '-' || IsDigit(token)) return ParseNumber();
+                        throw Invalid("Expected a JSON value");
                 }
             }
 
-            string ParseString()
+            private Dictionary<string, object> ParseObject(int depth)
             {
-                var s = new StringBuilder();
-                char c;
-
-                // Skip '"'
-                json.Read();
-
-                bool parsing = true;
-                while (parsing)
-                {
-                    if (json.Peek() == -1)
-                    {
-                        parsing = false;
-                        break;
-                    }
-
-                    c = NextChar;
-                    switch (c)
-                    {
-                        case '"':
-                            parsing = false;
-                            break;
-                        case '\\':
-                            if (json.Peek() == -1)
-                            {
-                                parsing = false;
-                                break;
-                            }
-
-                            c = NextChar;
-                            switch (c)
-                            {
-                                case '"':
-                                case '\\':
-                                case '/':
-                                    s.Append(c);
-                                    break;
-                                case 'b':
-                                    s.Append('\b');
-                                    break;
-                                case 'f':
-                                    s.Append('\f');
-                                    break;
-                                case 'n':
-                                    s.Append('\n');
-                                    break;
-                                case 'r':
-                                    s.Append('\r');
-                                    break;
-                                case 't':
-                                    s.Append('\t');
-                                    break;
-                                case 'u':
-                                    var hex = new char[4];
-                                    for (int i = 0; i < 4; i++)
-                                    {
-                                        hex[i] = NextChar;
-                                    }
-                                    s.Append((char)Convert.ToInt32(new string(hex), 16));
-                                    break;
-                            }
-                            break;
-                        default:
-                            s.Append(c);
-                            break;
-                    }
-                }
-
-                return s.ToString();
-            }
-
-            object ParseNumber()
-            {
-                string number = NextWord;
-
-                if (number.IndexOf('.') == -1 && number.IndexOf('e') == -1 && number.IndexOf('E') == -1)
-                {
-                    if (long.TryParse(number, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsedLong))
-                        return parsedLong;
-                }
-
-                if (double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsedDouble))
-                    return parsedDouble;
-
-                return null;
-            }
-
-            void EatWhitespace()
-            {
-                while (char.IsWhiteSpace(PeekChar))
-                {
-                    json.Read();
-                    if (json.Peek() == -1)
-                        break;
-                }
-            }
-
-            char PeekChar => Convert.ToChar(json.Peek());
-
-            char NextChar => Convert.ToChar(json.Read());
-
-            string NextWord
-            {
-                get
-                {
-                    var word = new StringBuilder();
-
-                    while (!IsWordBreak(PeekChar))
-                    {
-                        word.Append(NextChar);
-
-                        if (json.Peek() == -1)
-                            break;
-                    }
-
-                    return word.ToString();
-                }
-            }
-
-            TOKEN NextToken
-            {
-                get
+                var result = new Dictionary<string, object>();
+                position++;
+                EatWhitespace();
+                if (Consume('}')) return result;
+                while (true)
                 {
                     EatWhitespace();
+                    if (position == json.Length || json[position] != '"')
+                        throw Invalid("Expected an object property name");
+                    string name = ParseString();
+                    EatWhitespace();
+                    if (!Consume(':')) throw Invalid("Expected ':' after the property name");
+                    result[name] = ParseValue(depth);
+                    EatWhitespace();
+                    if (Consume('}')) return result;
+                    if (!Consume(',')) throw Invalid("Expected ',' or '}' after the property value");
+                }
+            }
 
-                    if (json.Peek() == -1)
-                        return TOKEN.NONE;
+            private List<object> ParseArray(int depth)
+            {
+                var result = new List<object>();
+                position++;
+                EatWhitespace();
+                if (Consume(']')) return result;
+                while (true)
+                {
+                    result.Add(ParseValue(depth));
+                    EatWhitespace();
+                    if (Consume(']')) return result;
+                    if (!Consume(',')) throw Invalid("Expected ',' or ']' after the array value");
+                }
+            }
 
-                    switch (PeekChar)
+            private string ParseString()
+            {
+                position++;
+                int start = position;
+                StringBuilder builder = null;
+                while (position < json.Length)
+                {
+                    char value = json[position++];
+                    if (value == '"')
                     {
-                        case '{':
-                            return TOKEN.CURLY_OPEN;
-                        case '}':
-                            json.Read();
-                            return TOKEN.CURLY_CLOSE;
-                        case '[':
-                            return TOKEN.SQUARED_OPEN;
-                        case ']':
-                            json.Read();
-                            return TOKEN.SQUARED_CLOSE;
-                        case ',':
-                            json.Read();
-                            return TOKEN.COMMA;
-                        case '"':
-                            return TOKEN.STRING;
-                        case ':':
-                            json.Read();
-                            return TOKEN.COLON;
-                        case '0':
-                        case '1':
-                        case '2':
-                        case '3':
-                        case '4':
-                        case '5':
-                        case '6':
-                        case '7':
-                        case '8':
-                        case '9':
-                        case '-':
-                            return TOKEN.NUMBER;
+                        if (builder == null) return json.Substring(start, position - start - 1);
+                        builder.Append(json, start, position - start - 1);
+                        return builder.ToString();
                     }
+                    if (value < ' ') throw Invalid("Unescaped control character in a string");
+                    if (value != '\\') continue;
 
-                    switch (NextWord)
+                    if (builder == null) builder = new StringBuilder();
+                    builder.Append(json, start, position - start - 1);
+                    if (position == json.Length) throw Invalid("Incomplete string escape");
+                    char escape = json[position++];
+                    switch (escape)
                     {
-                        case "false":
-                            return TOKEN.FALSE;
-                        case "true":
-                            return TOKEN.TRUE;
-                        case "null":
-                            return TOKEN.NULL;
+                        case '"': case '\\': case '/': builder.Append(escape); break;
+                        case 'b': builder.Append('\b'); break;
+                        case 'f': builder.Append('\f'); break;
+                        case 'n': builder.Append('\n'); break;
+                        case 'r': builder.Append('\r'); break;
+                        case 't': builder.Append('\t'); break;
+                        case 'u':
+                            int code = 0;
+                            for (int digit = 0; digit < 4; digit++)
+                            {
+                                if (position == json.Length) throw Invalid("Incomplete Unicode escape");
+                                char hex = json[position++];
+                                int number = hex >= '0' && hex <= '9' ? hex - '0' :
+                                    hex >= 'a' && hex <= 'f' ? hex - 'a' + 10 :
+                                    hex >= 'A' && hex <= 'F' ? hex - 'A' + 10 : -1;
+                                if (number < 0) throw Invalid("Invalid Unicode escape");
+                                code = code * 16 + number;
+                            }
+                            builder.Append((char)code);
+                            break;
+                        default: throw Invalid("Invalid string escape");
                     }
-
-                    return TOKEN.NONE;
+                    start = position;
                 }
+                throw Invalid("Unterminated string");
             }
 
-            static bool IsWordBreak(char c)
+            private object ParseNumber()
             {
-                return char.IsWhiteSpace(c) || WORD_BREAK.IndexOf(c) != -1;
+                int start = position;
+                Consume('-');
+                if (!Consume('0')) ReadDigits();
+                bool integer = true;
+                if (Consume('.'))
+                {
+                    integer = false;
+                    ReadDigits();
+                }
+                if (Consume('e') || Consume('E'))
+                {
+                    integer = false;
+                    if (!Consume('+')) Consume('-');
+                    ReadDigits();
+                }
+                string number = json.Substring(start, position - start);
+                if (integer && long.TryParse(number, NumberStyles.Integer, CultureInfo.InvariantCulture,
+                        out long whole))
+                    return whole;
+                if (double.TryParse(number, NumberStyles.Float, CultureInfo.InvariantCulture, out double value) &&
+                    !double.IsInfinity(value) && !double.IsNaN(value))
+                    return value;
+                throw Invalid("Number is outside the supported range");
             }
 
-            enum TOKEN
+            private void ReadDigits()
             {
-                NONE,
-                CURLY_OPEN,
-                CURLY_CLOSE,
-                SQUARED_OPEN,
-                SQUARED_CLOSE,
-                COLON,
-                COMMA,
-                STRING,
-                NUMBER,
-                TRUE,
-                FALSE,
-                NULL
+                int start = position;
+                while (position < json.Length && IsDigit(json[position])) position++;
+                if (position == start) throw Invalid("Expected a digit");
             }
 
-            sealed class StringReader
+            private void ReadLiteral(string literal)
             {
-                readonly string str;
-                int pos;
+                for (int index = 0; index < literal.Length; index++)
+                    if (position == json.Length || json[position++] != literal[index])
+                        throw Invalid("Invalid JSON literal");
+            }
 
-                public StringReader(string s)
-                {
-                    str = s;
-                    pos = 0;
-                }
+            private bool Consume(char expected)
+            {
+                if (position == json.Length || json[position] != expected) return false;
+                position++;
+                return true;
+            }
 
-                public int Peek()
+            private void EatWhitespace()
+            {
+                while (position < json.Length)
                 {
-                    if (pos >= str.Length)
-                        return -1;
-                    return str[pos];
-                }
-
-                public int Read()
-                {
-                    if (pos >= str.Length)
-                        return -1;
-                    return str[pos++];
+                    char value = json[position];
+                    if (value != ' ' && value != '\t' && value != '\n' && value != '\r') return;
+                    position++;
                 }
             }
+
+            private static bool IsDigit(char value) => value >= '0' && value <= '9';
+
+            private FormatException Invalid(string message) =>
+                new FormatException(message + " at character " + position + ".");
         }
 
         sealed class Serializer

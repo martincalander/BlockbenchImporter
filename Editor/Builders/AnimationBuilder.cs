@@ -39,17 +39,32 @@ namespace MartinCalander.BlockbenchImporter.Builders
         public List<AnimationClip> BuildAnimationClips()
         {
             var clips = new List<AnimationClip>();
+            var restRotations = new Dictionary<string, Vector3>();
+            ReadInlineRotations(model.outliner, restRotations);
+            foreach (BbGroup group in model.groups)
+                if (!string.IsNullOrEmpty(group.uuid)) restRotations[group.uuid] = ReadVector(group.rotation);
+            foreach (BbElement element in model.elements)
+                if (!string.IsNullOrEmpty(element.uuid)) restRotations[element.uuid] = ReadVector(element.rotation);
 
-            foreach (var anim in model.animations)
+
+            try
             {
-                var clip = BuildAnimationClip(anim);
-                if (clip != null)
+                foreach (var anim in model.animations)
                 {
-                    clips.Add(clip);
+                    var clip = BuildAnimationClip(anim, restRotations);
+                    if (clip != null)
+                    {
+                        clips.Add(clip);
+                    }
                 }
-            }
 
-            return clips;
+                return clips;
+            }
+            catch
+            {
+                foreach (AnimationClip clip in clips) Object.DestroyImmediate(clip);
+                throw;
+            }
         }
 
         /// <summary>
@@ -68,51 +83,59 @@ namespace MartinCalander.BlockbenchImporter.Builders
             controller.name = System.IO.Path.GetFileNameWithoutExtension(assetPath) + "_Controller";
             result.controller = controller;
 
-            // Create a state machine manually (required for sub-asset controllers)
-            var stateMachine = new AnimatorStateMachine();
-            stateMachine.name = "Base Layer";
-            stateMachine.hideFlags = HideFlags.HideInHierarchy;
-            result.subAssets.Add(stateMachine);
-
-            // Create layer with the state machine
-            var layer = new AnimatorControllerLayer
+            try
             {
-                name = "Base Layer",
-                stateMachine = stateMachine,
-                defaultWeight = 1f
-            };
+                // Create a state machine manually (required for sub-asset controllers)
+                var stateMachine = new AnimatorStateMachine();
+                stateMachine.name = "Base Layer";
+                stateMachine.hideFlags = HideFlags.HideInHierarchy;
+                result.subAssets.Add(stateMachine);
 
-            // Add layer to controller
-            controller.AddLayer(layer);
-
-            // Create states for each clip
-            AnimatorState defaultState = null;
-
-            foreach (var clip in clips)
-            {
-                var state = stateMachine.AddState(clip.name);
-                state.motion = clip;
-                state.hideFlags = HideFlags.HideInHierarchy;
-                result.subAssets.Add(state);
-
-                if (defaultState == null)
+                // Create layer with the state machine
+                var layer = new AnimatorControllerLayer
                 {
-                    defaultState = state;
+                    name = "Base Layer",
+                    stateMachine = stateMachine,
+                    defaultWeight = 1f
+                };
+
+                // Add layer to controller
+                controller.AddLayer(layer);
+
+                // Create states for each clip
+                AnimatorState defaultState = null;
+
+                foreach (var clip in clips)
+                {
+                    var state = stateMachine.AddState(clip.name);
+                    state.motion = clip;
+                    state.hideFlags = HideFlags.HideInHierarchy;
+                    result.subAssets.Add(state);
+
+                    if (defaultState == null)
+                    {
+                        defaultState = state;
+                    }
                 }
-            }
 
-            // Set default state
-            if (defaultState != null)
+                // Set default state
+                if (defaultState != null)
+                {
+                    stateMachine.defaultState = defaultState;
+                }
+
+                return result;
+            }
+            catch
             {
-                stateMachine.defaultState = defaultState;
+                foreach (Object child in result.subAssets) Object.DestroyImmediate(child);
+                Object.DestroyImmediate(controller);
+                throw;
             }
-
-            return result;
         }
 
         private sealed class AnimationTarget
         {
-            public string uuid;
             public string path;
             public Transform transform;
             public BbAnimator animator;
@@ -142,17 +165,10 @@ namespace MartinCalander.BlockbenchImporter.Builders
             }
         }
 
-        private AnimationClip BuildAnimationClip(BbAnimation anim)
+        private AnimationClip BuildAnimationClip(BbAnimation anim, Dictionary<string, Vector3> restRotations)
         {
             var targets = new List<AnimationTarget>();
             var targetsByTransform = new Dictionary<Transform, AnimationTarget>();
-            var restRotations = new Dictionary<string, Vector3>();
-            ReadInlineRotations(model.outliner, restRotations);
-            foreach (BbGroup group in model.groups)
-                if (!string.IsNullOrEmpty(group.uuid)) restRotations[group.uuid] = ReadVector(group.rotation);
-            foreach (BbElement element in model.elements)
-                if (!string.IsNullOrEmpty(element.uuid)) restRotations[element.uuid] = ReadVector(element.rotation);
-
             float duration = Mathf.Max(0f, anim.length);
             foreach (var pair in anim.animators)
             {
@@ -161,7 +177,7 @@ namespace MartinCalander.BlockbenchImporter.Builders
                     Debug.LogWarning($"Animation references unknown node UUID: {pair.Key}");
                     continue;
                 }
-                var target = new AnimationTarget { uuid = pair.Key, path = path, animator = pair.Value };
+                var target = new AnimationTarget { path = path, animator = pair.Value };
                 if (uuidToTransform.TryGetValue(pair.Key, out Transform transform))
                 {
                     target.transform = transform;
@@ -201,21 +217,29 @@ namespace MartinCalander.BlockbenchImporter.Builders
                 wrapMode = anim.loop == "loop" ? WrapMode.Loop :
                     anim.loop == "hold" ? WrapMode.ClampForever : WrapMode.Once
             };
-            foreach (AnimationTarget target in targets)
+            try
             {
-                BuildVectorCurves(clip, target.path, target.position, "localPosition", target.restPosition,
-                    new Vector3(-settings.importScale, settings.importScale, settings.importScale), duration, anim.loop);
-                BuildVectorCurves(clip, target.path, target.scale, "localScale", Vector3.zero,
-                    target.restScale, duration, anim.loop);
-                if (target.rotation.Count != 0 || target.animator.rotation_global)
-                    BuildRotationCurves(clip, target, targetsByTransform, duration, anim);
+                foreach (AnimationTarget target in targets)
+                {
+                    BuildVectorCurves(clip, target.path, target.position, "localPosition", target.restPosition,
+                        new Vector3(-settings.importScale, settings.importScale, settings.importScale), duration, anim.loop);
+                    BuildVectorCurves(clip, target.path, target.scale, "localScale", Vector3.zero,
+                        target.restScale, duration, anim.loop);
+                    if (target.rotation.Count != 0 || target.animator.rotation_global)
+                        BuildRotationCurves(clip, target, targetsByTransform, duration, anim);
+                }
+                var clipSettings = AnimationUtility.GetAnimationClipSettings(clip);
+                clipSettings.loopTime = anim.loop == "loop";
+                clipSettings.startTime = 0f;
+                clipSettings.stopTime = duration;
+                AnimationUtility.SetAnimationClipSettings(clip, clipSettings);
+                return clip;
             }
-            var clipSettings = AnimationUtility.GetAnimationClipSettings(clip);
-            clipSettings.loopTime = anim.loop == "loop";
-            clipSettings.startTime = 0f;
-            clipSettings.stopTime = duration;
-            AnimationUtility.SetAnimationClipSettings(clip, clipSettings);
-            return clip;
+            catch
+            {
+                Object.DestroyImmediate(clip);
+                throw;
+            }
         }
 
         private static Vector3 ReadVector(float[] value) => value != null && value.Length >= 3

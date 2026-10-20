@@ -16,7 +16,7 @@ Select the `.bbmodel` in the Project window. Change a setting, then press **Appl
 
 ### Geometry
 
-- **Import Scale** sets the number of Unity units generated for each Blockbench model unit. The default `0.0625` means sixteen Blockbench units equal one Unity unit, matching Blockbench's default 3D export convention. The scale is baked into generated transforms, meshes, colliders, skinning, and position animation while the prefab root remains at `(1, 1, 1)`.
+- **Import Scale** sets the number of Unity units generated for each Blockbench model unit. The default `0.0625` means sixteen Blockbench units equal one Unity unit, matching Blockbench's default 3D export convention. The scale is baked into generated transforms, meshes, colliders, skinning, and position animation while the prefab root remains at `(1, 1, 1)`. Import Scale must be finite; NaN and infinity are rejected.
 - **Include Hidden Elements** includes things hidden in the Blockbench editor.
 - **Include Non-Exported Elements** includes things with export turned off.
 - **Generate Colliders** turns supported bounding boxes into `BoxCollider` components.
