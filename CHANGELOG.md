@@ -6,7 +6,7 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 
 ### Changed
 
-- Renamed the package ID from `com.essentials.blockbenchimporter` to `com.martincalander.blockbenchimporter`, and moved public namespaces and assembly names from `Essentials.BlockbenchImporter` to `MartinCalander.BlockbenchImporter`.
+- Renamed the package ID to `com.martincalander.blockbenchimporter` and public namespaces and assembly names to `MartinCalander.BlockbenchImporter`.
 - Replaced custom README artwork with the standard Blockbench and Unity logos.
 - Replaced the root package icon with Blockbench's standard application icon.
 - Rewrote the public and UPM documentation in a shorter, more direct maintainer voice.
