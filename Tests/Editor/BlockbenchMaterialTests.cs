@@ -41,49 +41,25 @@ namespace MartinCalander.BlockbenchImporter.Tests
             Directory.Delete(directory, true);
         }
 
-        [Test]
-        public void RelativeTextureOverridesAbsolutePathAndEmbeddedSnapshot()
+        [TestCase(true, true, "#FF0000")]
+        [TestCase(false, true, "#0000FF")]
+        [TestCase(false, false, "#00FF00")]
+        public void TextureSelectionPrefersRelativeThenAbsoluteThenEmbeddedImages(
+            bool relativeExists, bool absoluteExists, string expectedColor)
         {
             Directory.CreateDirectory(Path.Combine(directory, "textures"));
-            File.WriteAllBytes(Path.Combine(directory, "textures", "current.png"), Png(Color.red));
-            string oldPath = Path.Combine(directory, "old.png");
-            File.WriteAllBytes(oldPath, Png(Color.blue));
+            if (relativeExists)
+                File.WriteAllBytes(Path.Combine(directory, "textures", "current.png"), Png(Color.red));
+            string absolutePath = Path.Combine(directory, "current.png");
+            if (absoluteExists) File.WriteAllBytes(absolutePath, Png(Color.blue));
             MaterialBuilder builder = Builder(new BbTexture
             {
                 relative_path = "textures\\current.png",
-                path = oldPath,
-                source = DataUri(Color.green)
-            });
-
-            AssertColor(builder.BuildTextures()[0].GetPixel(0, 0), Color.red);
-        }
-
-        [Test]
-        public void AbsoluteTextureOverridesEmbeddedSnapshotWhenRelativeFileIsMissing()
-        {
-            string absolutePath = Path.Combine(directory, "current.png");
-            File.WriteAllBytes(absolutePath, Png(Color.blue));
-            MaterialBuilder builder = Builder(new BbTexture
-            {
-                relative_path = "missing.png",
                 path = absolutePath,
                 source = DataUri(Color.green)
             });
-
-            AssertColor(builder.BuildTextures()[0].GetPixel(0, 0), Color.blue);
-        }
-
-        [Test]
-        public void MissingExternalFilesFallBackToEmbeddedTexture()
-        {
-            MaterialBuilder builder = Builder(new BbTexture
-            {
-                relative_path = "missing.png",
-                path = Path.Combine(directory, "also-missing.png"),
-                source = DataUri(Color.green)
-            });
-
-            AssertColor(builder.BuildTextures()[0].GetPixel(0, 0), Color.green);
+            ColorUtility.TryParseHtmlString(expectedColor, out Color expected);
+            AssertColor(builder.BuildTextures()[0].GetPixel(0, 0), expected);
         }
 
         [TestCase(BlockbenchAlphaMode.Auto, true)]

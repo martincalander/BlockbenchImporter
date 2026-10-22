@@ -75,26 +75,6 @@ namespace MartinCalander.BlockbenchImporter.Tests
             finally { Object.DestroyImmediate(result.mesh); }
         }
 
-        [Test]
-        public void InvalidMeshFacesDoNotRetainUnusedMaterialSlots()
-        {
-            var element = Polygon(new[]
-            {
-                new[] { 0f, 0f, 0f }, new[] { 1f, 0f, 0f }, new[] { 0f, 1f, 0f }
-            });
-            element.meshFaces["missing"] = new BbMeshFace
-            {
-                texture = 5, vertices = new List<string> { "0", "missing", "1" }
-            };
-            CubeMeshResult result = MeshElementBuilder.BuildMeshElement(element, new[] { 16, 16 }, 6);
-            try
-            {
-                Assert.That(result.textureIndices, Is.EqualTo(new[] { -1 }));
-                Assert.That(result.mesh.subMeshCount, Is.EqualTo(1));
-            }
-            finally { Object.DestroyImmediate(result.mesh); }
-        }
-
         [TestCase(0)]
         [TestCase(-16)]
         public void NonPositiveModelResolutionProducesFiniteUvs(int resolution)
@@ -120,6 +100,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
             Vector3 actual = CoordinateConverter.ConvertRotation(90f, 90f, 90f) *
                              new Vector3(-2f, 3f, 5f);
             AssertVector(actual, new Vector3(-5f, 3f, -2f));
+            AssertVector(CoordinateConverter.ConvertPositionRaw(2, 3, 4), new Vector3(-2f, 3f, 4f));
             AssertVector(CoordinateConverter.ConvertDirection(new Vector3(1f, 2f, 3f)),
                 new Vector3(-1f, 2f, 3f));
         }
@@ -183,7 +164,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
         }
 
         [Test]
-        public void DiscardedFaceDoesNotShiftSourceVertexIdsForSkinning()
+        public void DiscardedFaceDoesNotRetainMaterialSlotsOrShiftSkinningVertexIds()
         {
             var element = Polygon(new[]
             {
@@ -194,13 +175,15 @@ namespace MartinCalander.BlockbenchImporter.Tests
             {
                 ["missing-vertex"] = new BbMeshFace
                 {
-                    vertices = new List<string> { "0", "1", "missing" }
+                    texture = 5, vertices = new List<string> { "0", "1", "missing" }
                 },
                 ["valid"] = validFace
             };
-            CubeMeshResult result = MeshElementBuilder.BuildMeshElement(element, new[] { 16, 16 }, 0);
+            CubeMeshResult result = MeshElementBuilder.BuildMeshElement(element, new[] { 16, 16 }, 6);
             try
             {
+                Assert.That(result.textureIndices, Is.EqualTo(new[] { -1 }));
+                Assert.That(result.mesh.subMeshCount, Is.EqualTo(1));
                 Assert.That(result.sourceVertexIds, Is.EqualTo(new[] { "0", "1", "2" }));
                 Assert.That(result.sourceVertexIds.Length, Is.EqualTo(result.mesh.vertexCount));
             }

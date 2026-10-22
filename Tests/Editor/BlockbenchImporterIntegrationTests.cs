@@ -49,8 +49,6 @@ namespace MartinCalander.BlockbenchImporter.Tests
         {
             AssetDatabase.DeleteAsset(Folder);
             AssetDatabase.CreateFolder("Assets", "__BlockbenchImporterTests");
-            File.WriteAllText(AssetPath, Model);
-            AssetDatabase.ImportAsset(AssetPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
         }
 
         [TearDown]
@@ -86,6 +84,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
         [Category("PlayModeLifecycle")]
         public IEnumerator ReimportAndBillboardsSurviveTwoPlaySessionsWithoutDomainReload()
         {
+            ImportMainModel();
             previousPlayModeOptionsEnabled = EditorSettings.enterPlayModeOptionsEnabled;
             previousPlayModeOptions = EditorSettings.enterPlayModeOptions;
             restorePlayModeSettings = true;
@@ -145,6 +144,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
         [TestCase(float.NegativeInfinity)]
         public void NonFiniteImportScaleIsRejectedWithoutChangingSettings(float value)
         {
+            ImportMainModel();
             var importer = (BlockbenchImporter)AssetImporter.GetAtPath(AssetPath);
             float original = importer.ImportScale;
             Assert.Throws<System.ArgumentOutOfRangeException>(() => importer.ImportScale = value);
@@ -170,6 +170,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
         [Test]
         public void Import_CreatesPrefabAndAllConfiguredSubAssets()
         {
+            ImportMainModel();
             var root = AssetDatabase.LoadMainAssetAtPath(AssetPath) as GameObject;
             Object[] assets = AssetDatabase.LoadAllAssetsAtPath(AssetPath);
 
@@ -213,6 +214,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
         [Test]
         public void CustomImportScale_IsBakedWithoutScalingPrefabRoot()
         {
+            ImportMainModel();
             var importer = AssetImporter.GetAtPath(AssetPath) as BlockbenchImporter;
             Assert.That(importer, Is.Not.Null);
             importer.ImportScale = 0.5f;
@@ -231,16 +233,9 @@ namespace MartinCalander.BlockbenchImporter.Tests
         }
 
         [Test]
-        public void Reimport_PreservesSubAssetLocalIdentifiers()
-        {
-            string before = LocalIdSnapshot();
-            AssetDatabase.ImportAsset(AssetPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
-            Assert.That(LocalIdSnapshot(), Is.EqualTo(before));
-        }
-
-        [Test]
         public void PostImportHook_CanCustomizeRootAndAddSubAsset()
         {
+            ImportMainModel();
             var callbackCount = 0;
             var callbackSawGeneratedAssets = false;
             BlockbenchImportHookTestPostprocessor.PathToHandle = AssetPath;
@@ -364,6 +359,12 @@ namespace MartinCalander.BlockbenchImporter.Tests
                 Assert.That(weights[2].weight0, Is.EqualTo(0.5f));
                 Assert.That(weights[2].weight1, Is.EqualTo(0.5f));
             }
+        }
+
+        private static void ImportMainModel()
+        {
+            File.WriteAllText(AssetPath, Model);
+            AssetDatabase.ImportAsset(AssetPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
         }
 
         private static string LocalIdSnapshot()

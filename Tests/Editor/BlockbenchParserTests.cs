@@ -154,14 +154,6 @@ namespace MartinCalander.BlockbenchImporter.Tests
         }
 
         [Test]
-        public void Parse_NullFaceTextureDisablesFace()
-        {
-            string json = MinimalModel.Replace(@"""texture"":0", @"""texture"":null");
-            var model = BbModelParser.Parse(json);
-            Assert.That(model.elements[0].faces["north"].enabled, Is.False);
-        }
-
-        [Test]
         public void Parse_MissingScaleAxesAndBezierHandlesUseBlockbenchDefaults()
         {
             var model = BbModelParser.Parse(@"{

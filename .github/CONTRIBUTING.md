@@ -90,3 +90,22 @@ Not tested: Unity `2021.3` or other Editor versions beyond the three listed,
 Windows, Linux, player builds, signed release artifacts, and hosted CI. These
 are local working-tree checks, not release evidence for another commit,
 platform, Editor version, or package archive.
+
+## Test suite cleanup verification on 2026-10-20
+
+Test source decreased from 2,285 to 2,178 lines, and the suite from 136 to
+132 cases. Four removed cases duplicated null-face texture, coordinate,
+discarded-face, and reimport-ID coverage retained elsewhere. Texture precedence
+and clip cleanup share parameterized setup; the global-rotation test now uses
+the animation fixture's helpers. Explicit model setup avoids five unnecessary
+imports per suite. Product source, test files, and metadata were retained.
+
+The focused integration checks and final full suites passed on macOS ARM64:
+132 cases on `7000.0.0a11`, and 130 on each of `6000.5.5f1` and `6000.7.0b2`.
+Each Unity 6 run skipped the two URP cases because its project lacks URP;
+both passed on Unity 7. All three used CLI `1.0.0-beta.13`, Test Framework
+`1.9.0`, and `-automated`, with no C# warnings or errors. Package validation,
+Markdown lint, package dry run, and whitespace checks passed.
+
+Other Editor versions, Windows, Linux, player builds, and release or hosted CI
+were not rerun. Cleanup evidence is under `Logs/test-cleanup/` in the workspace.

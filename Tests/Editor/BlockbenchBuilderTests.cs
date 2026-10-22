@@ -15,23 +15,9 @@ namespace MartinCalander.BlockbenchImporter.Tests
 {
     public sealed class BlockbenchBuilderTests
     {
-        [Test]
-        public void FailedAnimationBatchReleasesEarlierClips()
-        {
-            string name = "FailedClipBatch_" + Guid.NewGuid().ToString("N");
-            var animator = new BbAnimator();
-            animator.keyframes.Add(new BbKeyframe { channel = "position" });
-            var animation = new BbAnimation { name = name };
-            animation.animators["target"] = animator;
-            var model = new BbModel();
-            model.animations.Add(animation);
-            model.animations.Add(null);
-            Assert.Throws<NullReferenceException>(() => CreateAnimationBuilder(model).BuildAnimationClips());
-            Assert.That(Resources.FindObjectsOfTypeAll<AnimationClip>().Where(clip => clip.name == name), Is.Empty);
-        }
-
-        [Test]
-        public void FailedClipConstructionReleasesItsNativeClip()
+        [TestCase(false)]
+        [TestCase(true)]
+        public void FailedAnimationBuildReleasesCreatedClips(bool failAfterFirstClip)
         {
             string name = "FailedClip_" + Guid.NewGuid().ToString("N");
             var animator = new BbAnimator();
@@ -40,9 +26,10 @@ namespace MartinCalander.BlockbenchImporter.Tests
             animation.animators["target"] = animator;
             var model = new BbModel();
             model.animations.Add(animation);
+            if (failAfterFirstClip) model.animations.Add(null);
             var builder = new AnimationBuilder(model,
                 new Dictionary<string, string> { ["target"] = "target" },
-                new Dictionary<string, Transform>(), null);
+                new Dictionary<string, Transform>(), failAfterFirstClip ? new BlockbenchImporterSettings() : null);
             Assert.Throws<NullReferenceException>(() => builder.BuildAnimationClips());
             Assert.That(Resources.FindObjectsOfTypeAll<AnimationClip>().Where(clip => clip.name == name), Is.Empty);
         }

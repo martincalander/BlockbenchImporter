@@ -34,7 +34,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
         [TestCase("scale", "m_LocalScale.x", 1f)]
         public void ScalarClipsRetainDeclaredDurationAndHoldTheLastValue(string channel, string property, float sign)
         {
-            WithClip(channel, new[] { Key(channel, 0f, 1f), Key(channel, 0.5f, 3f) }, 2f, clip =>
+            WithClip(new[] { Key(channel, 0f, 1f), Key(channel, 0.5f, 3f) }, 2f, clip =>
             {
                 Assert.That(clip.length, Is.EqualTo(2f).Within(0.00001f));
                 Assert.That(Curve(clip, property).Evaluate(1.5f), Is.EqualTo(3f * sign).Within(0.00001f));
@@ -47,7 +47,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
         {
             BbKeyframe split = Key(channel, 1f, 10f);
             split.data_points.Add(Point(20f));
-            WithClip(channel, new[] { Key(channel, 0f, 2f), split, Key(channel, 2f, 30f) }, 2f, clip =>
+            WithClip(new[] { Key(channel, 0f, 2f), split, Key(channel, 2f, 30f) }, 2f, clip =>
             {
                 AnimationCurve curve = Curve(clip, property);
                 Assert.That(curve.Evaluate(0.5f), Is.EqualTo(6f * sign).Within(0.001f));
@@ -62,7 +62,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
             BbKeyframe[] keys = { Key("position", 0f, 0f), Key("position", 1f, 10f),
                 Key("position", 3f, 0f), Key("position", 4f, 0f) };
             foreach (BbKeyframe key in keys) key.interpolation = "catmullrom";
-            WithClip("position", keys, 4f, clip =>
+            WithClip(keys, 4f, clip =>
             {
                 AnimationCurve curve = Curve(clip, "m_LocalPosition.x");
                 Assert.That(curve.Evaluate(2f), Is.EqualTo(-5.625f).Within(0.001f));
@@ -80,7 +80,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
             left.bezier_right_value = new[] { 6f, 0f, 0f };
             right.bezier_left_time = new[] { -1f / 3f, -1f / 3f, -1f / 3f };
             right.bezier_left_value = new[] { -2f, 0f, 0f };
-            WithClip("position", new[] { left, right }, 1f, clip =>
+            WithClip(new[] { left, right }, 1f, clip =>
                 Assert.That(Curve(clip, "m_LocalPosition.x").Evaluate(0.5f), Is.EqualTo(-6.5f).Within(0.001f)));
         }
 
@@ -89,7 +89,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
         {
             BbKeyframe middle = Key("position", 1f, 10f);
             middle.interpolation = "step";
-            WithClip("position", new[] { Key("position", 0f, 0f), middle, Key("position", 2f, 20f) }, 2f, clip =>
+            WithClip(new[] { Key("position", 0f, 0f), middle, Key("position", 2f, 20f) }, 2f, clip =>
             {
                 AnimationCurve curve = Curve(clip, "m_LocalPosition.x");
                 Assert.That(curve.Evaluate(0.5f), Is.EqualTo(-5f).Within(0.001f));
@@ -176,7 +176,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
         {
             BbKeyframe split = Key("rotation", 1f, 90f);
             split.data_points.Add(Point(180f));
-            WithClip("rotation", new[] { Key("rotation", 0f, 0f), split, Key("rotation", 2f, 270f) }, 2f, clip =>
+            WithClip(new[] { Key("rotation", 0f, 0f), split, Key("rotation", 2f, 270f) }, 2f, clip =>
             {
                 Assert.That(Quaternion.Angle(Rotation(clip, 1f), Quaternion.AngleAxis(90f, Vector3.right)), Is.LessThan(0.1f));
                 Assert.That(Quaternion.Angle(Rotation(clip, 1.5f), Quaternion.AngleAxis(225f, Vector3.right)), Is.LessThan(0.1f));
@@ -186,7 +186,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
         [Test]
         public void DuplicateRotationTimesKeepTheFirstExactKeyAndLastOutgoingKey()
         {
-            WithClip("rotation", new[]
+            WithClip(new[]
             {
                 Key("rotation", 0f, 0f), Key("rotation", 1f, 60f),
                 Key("rotation", 1f, 120f), Key("rotation", 2f, 180f)
@@ -236,6 +236,37 @@ namespace MartinCalander.BlockbenchImporter.Tests
         }
 
         [Test]
+        public void GlobalRotationIsBakedRelativeToParentRestPose()
+        {
+            var parent = new GameObject("parent");
+            var target = new GameObject("target");
+            target.transform.SetParent(parent.transform, false);
+            parent.transform.rotation = Quaternion.AngleAxis(30f, Vector3.up);
+            AnimationClip clip = null;
+            try
+            {
+                var animator = new BbAnimator { rotation_global = true };
+                animator.keyframes.Add(Key("rotation", 0f, 0f));
+                BbKeyframe end = Key("rotation", 1f, 0f);
+                end.data_points[0].y = "90";
+                animator.keyframes.Add(end);
+                var model = Model(animator, 1f);
+                model.animations[0].snapping = 15;
+                clip = Build(model,
+                    new Dictionary<string, string> { ["target"] = "target" },
+                    new Dictionary<string, Transform> { ["target"] = target.transform });
+                Quaternion expected = Quaternion.Inverse(parent.transform.rotation) *
+                                      Quaternion.AngleAxis(-45f, Vector3.up);
+                Assert.That(Quaternion.Angle(Rotation(clip, 0.5f), expected), Is.LessThan(0.1f));
+            }
+            finally
+            {
+                if (clip != null) Object.DestroyImmediate(clip);
+                Object.DestroyImmediate(parent);
+            }
+        }
+
+        [Test]
         public void GlobalRotationCancelsTheAnimatedParentAtEverySample()
         {
             var root = new GameObject("Animation test");
@@ -270,7 +301,7 @@ namespace MartinCalander.BlockbenchImporter.Tests
             finally { if (clip != null) Object.DestroyImmediate(clip); Object.DestroyImmediate(root); }
         }
 
-        private static void WithClip(string channel, BbKeyframe[] keys, float duration, System.Action<AnimationClip> check)
+        private static void WithClip(BbKeyframe[] keys, float duration, System.Action<AnimationClip> check)
         {
             var animator = new BbAnimator();
             animator.keyframes.AddRange(keys);
