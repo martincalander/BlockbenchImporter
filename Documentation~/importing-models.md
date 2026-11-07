@@ -28,10 +28,26 @@ Select the `.bbmodel` in the Project window. Change a setting, then press **Appl
 - **Point** filtering keeps hard pixel edges. **Bilinear** smooths them.
 - **Clamp** wrapping helps stop texture-atlas edges from bleeding.
 - **Alpha Mode** can detect transparency or force opaque/cutout rendering.
+- **Animate Textures** plays animated texture strips in Play mode.
 
 A custom Blockbench shader, Unity post-processing, tone mapping, or render-pipeline setting can still change the final look.
 
 When both an external image and an embedded snapshot are present, the importer uses the external image, matching Blockbench. It tries the saved relative path first, then the saved path, then the embedded image. Referenced images under `Assets/` or `Packages/` trigger reimport when added, edited, or deleted. Files outside the Unity project require a manual model reimport after editing.
+
+#### Animated textures
+
+Blockbench treats a texture as a flipbook when its image is taller than its UV size, with frames stacked from the top. Materials made from these textures show the first frame. With **Animate Textures** on, the root also gets a **Blockbench Texture Animation** component that plays the frames in Play mode at the texture's frame rate and order: loop, backwards, back and forth, or a custom list. Java block models use Minecraft frame times in ticks, including per-frame `index:ticks` entries. The component sets each animated material slot through its renderer's property block, so the imported materials stay unchanged. Use its **Speed** and **PlaybackTime** properties to control playback from scripts. Frame blending is not reproduced; the importer warns when a texture uses it.
+
+#### PBR texture groups
+
+A Blockbench texture group marked as a material combines a color texture with optional normal, height, and MER textures. With **Material Mode** set to **Lit**, the color texture's material becomes a URP Lit or Standard material:
+
+- a normal texture becomes its normal map; Bedrock normal maps are flipped to Unity's convention;
+- without a normal texture, a height texture is converted into a normal map;
+- MER red becomes metalness, blue becomes smoothness after inversion, and green masks the color texture into an emission map;
+- without a MER texture, the group's metalness, emissive, and roughness values are used.
+
+Generated maps are stored as texture sub-assets beside the originals. Normal, height, and MER textures are imported as linear data and do not get their own materials unless a face uses them directly. In Unlit mode, or with HDRP, the material uses only the color texture and the importer warns.
 
 Automatic alpha detection includes isolated transparent pixels. Built-in pipeline materials use the package's Unlit or Lit shader to preserve marker colors, cutout, and front, back, or double-sided rendering. URP uses its native shaders.
 
@@ -39,8 +55,35 @@ Automatic alpha detection includes isolated transparent pixels. Built-in pipelin
 
 - **Import Animations** creates one `AnimationClip` for each supported animation.
 - **Create Animator Controller** adds an Animator and a controller with one state per clip.
+- **Import Effect Events** turns sound, particle, and instruction keyframes into animation events.
 
 Numeric position, rotation, and scale tracks support linear, stepped, Catmull-Rom, and Bezier interpolation. Molang expressions are not run; see [format support](format-support.md).
+
+#### Effect events
+
+Sound, particle, and instruction (timeline) keyframes become animation events that call a **Blockbench Animation Events** component on the root, beside the generated Animator. The component lists each effect's name, particle locator, script, and file. Subscribe to `EffectTriggered` to play sounds or spawn particles:
+
+```csharp
+using MartinCalander.BlockbenchImporter;
+using UnityEngine;
+
+public sealed class FootstepSounds : MonoBehaviour
+{
+    [SerializeField] private AudioSource source;
+    [SerializeField] private AudioClip step;
+
+    private void OnEnable() => GetComponent<BlockbenchAnimationEvents>().EffectTriggered += OnEffect;
+    private void OnDisable() => GetComponent<BlockbenchAnimationEvents>().EffectTriggered -= OnEffect;
+
+    private void OnEffect(BlockbenchAnimationEvents.Effect effect)
+    {
+        if (effect.Type == BlockbenchAnimationEvents.EffectType.Sound && effect.Name == "mob.step")
+            source.PlayOneShot(step);
+    }
+}
+```
+
+A clip that only contains effect keyframes is still created. If you play the clips with an Animator on another object, add a **Blockbench Animation Events** component there as well, or Unity reports events without a receiver. Instruction scripts are passed through as text and are never run.
 
 Clips retain the declared animation duration and hold their final values when the last key is earlier. Split incoming/outgoing values and independent Bezier handles are preserved. Global rotation tracks compensate for animated parent rotations. Projects saved before format 5 receive the legacy animation axis conversion.
 

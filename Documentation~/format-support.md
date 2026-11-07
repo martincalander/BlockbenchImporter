@@ -24,11 +24,12 @@ The importer is written for Blockbench project format 5. It also accepts older f
 | Catmull-Rom and Bezier interpolation | Tangent curves; sampled rotation | Yes |
 | Split keys and global rotations | Curves with parent motion accounted for | Yes |
 | Once and loop playback | AnimationClip wrap mode | Yes |
+| Sound, particle, and instruction keyframes | Animation events and a receiver component | Yes; your scripts play the effects |
 | Marker colors | Simple generated materials | Yes |
 | Unknown plugin elements | Transform and Console warning | Preserved |
 | Texture meshes and splines | Transform and Console warning | Preserved; no mesh yet |
-| PBR texture groups | Separate textures and warning | No channel packing yet |
-| Animated texture atlases | Texture and warning | No playback yet |
+| PBR material texture groups | Lit material with normal, metallic, smoothness, and emission maps | URP and built-in; Lit mode |
+| Animated textures (flipbooks) | First frame in materials; playback component | Yes; frame blending is not reproduced |
 | Molang or other expressions | Warning; value becomes zero | Never executed |
 
 ## Coordinates

@@ -88,6 +88,12 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 }
             }
 
+            // Parse texture groups
+            if (root.TryGetValue("texture_groups", out var groupsValue) && groupsValue is List<object> textureGroups)
+                foreach (object value in textureGroups)
+                    if (value is Dictionary<string, object> groupDict)
+                        model.texture_groups.Add(ParseTextureGroup(groupDict));
+
             // Parse animations
             if (root.TryGetValue("animations", out var animationsObj) && animationsObj is List<object> animationsList)
             {
@@ -135,21 +141,12 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 if (!string.IsNullOrEmpty(group.uuid) && !uuids.Add(group.uuid))
                     model.warnings.Add("Duplicate group UUID '" + group.uuid + "' may make hierarchy and animation bindings ambiguous.");
 
-            foreach (BbTexture texture in model.textures)
-            {
-                if (!string.IsNullOrEmpty(texture.pbr_channel) && texture.pbr_channel != "color")
-                    model.warnings.Add("Texture '" + texture.name + "' uses PBR channel '" + texture.pbr_channel +
-                                       "'. It is imported separately; automatic PBR texture-group assembly is not available.");
-                if (texture.frame_count > 1)
-                    model.warnings.Add("Animated texture '" + texture.name +
-                                       "' is imported as a complete atlas; runtime frame playback is not generated.");
-            }
-
             foreach (BbAnimation animation in model.animations)
             foreach (var pair in animation.animators)
             {
                 BbAnimator animator = pair.Value;
-                if (animator.type != "bone")
+                // Effect tracks become animation events; other non-transform tracks have no Unity equivalent.
+                if (animator.type != "bone" && animator.type != "effect")
                     model.warnings.Add("Animation '" + animation.name + "' contains '" + animator.type +
                                        "' tracks. Only transform tracks produce Unity curves.");
                 foreach (BbKeyframe keyframe in animator.keyframes)
@@ -393,9 +390,15 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 source = GetString(dict, "source"),
                 render_mode = GetString(dict, "render_mode", "default"),
                 pbr_channel = GetString(dict, "pbr_channel", "color"),
+                group = GetString(dict, "group"),
                 render_sides = GetString(dict, "render_sides", "auto"),
+                fps = GetFloat(dict, "fps", 7f),
                 frame_time = GetInt(dict, "frame_time", 1),
-                frame_count = GetInt(dict, "frame_count", 1),
+                frame_order_type = GetString(dict, "frame_order_type", "loop"),
+                frame_order = dict.TryGetValue("frame_order", out object order) && order is List<object> orderList
+                    ? string.Join(" ", orderList)
+                    : GetStringOrNumber(dict, "frame_order", string.Empty),
+                frame_interpolate = GetBool(dict, "frame_interpolate"),
                 visible = GetBool(dict, "visible", true),
                 use_as_default = GetBool(dict, "use_as_default"),
                 mode = GetString(dict, "mode", "bitmap"),
@@ -408,6 +411,22 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 particle = GetBool(dict, "particle"),
                 layers_enabled = GetBool(dict, "layers_enabled")
             };
+        }
+
+        private static BbTextureGroup ParseTextureGroup(Dictionary<string, object> dict)
+        {
+            var group = new BbTextureGroup
+            {
+                uuid = GetString(dict, "uuid"),
+                name = GetString(dict, "name"),
+                is_material = GetBool(dict, "is_material")
+            };
+            if (dict.TryGetValue("material_config", out object config) && config is Dictionary<string, object> configDict)
+            {
+                group.color_value = GetFloatArray(configDict, "color_value", group.color_value, 4);
+                group.mer_value = GetFloatArray(configDict, "mer_value", group.mer_value, 3);
+            }
+            return group;
         }
 
         private static BbAnimation ParseAnimation(Dictionary<string, object> dict)

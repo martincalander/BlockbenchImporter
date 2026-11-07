@@ -22,6 +22,9 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 
 ### Added
 
+- Turn sound, particle, and instruction keyframes into animation events received by a `BlockbenchAnimationEvents` component on the model root. **Import Effect Events** controls this, and clips with only effect keyframes are now created.
+- Play animated textures with a `BlockbenchTextureAnimation` component, following Blockbench's frame count, frame rate, and loop, backwards, back-and-forth, or custom order. Materials show the first frame instead of the whole strip. **Animate Textures** controls playback.
+- Combine PBR material texture groups into one Lit material with normal, metallic-smoothness, and emission maps for URP and the built-in pipeline. Height maps become normal maps, Bedrock normal maps are flipped, and constant MER values apply when no MER texture exists.
 - Added `BlockbenchImporter.OnPostBlockbenchImport` for deterministic scripted customization of generated roots and sub-assets during import.
 - Added a Package Manager sample demonstrating opt-in post-import component, material, and sub-asset customization.
 - Added coverage for two consecutive Play sessions with domain reload disabled, including billboard camera changes and stable model reimports, and documented the package's lifecycle behavior.

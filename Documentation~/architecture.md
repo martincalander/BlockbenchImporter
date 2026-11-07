@@ -22,7 +22,9 @@ Transparency checks scan every pixel and access readable RGBA32 data directly. A
 
 Groups use shared model pivots, while armature bones use parent-local origins. Coordinate conversion mirrors X and composes rotations in Blockbench's ZYX order. Polygon winding and normals are converted together.
 
-Animations only create a Unity clip when a supported transform channel has keyframes. Empty animations and unsupported tracks do not retain unused native clips.
+Animations only create a Unity clip when a supported transform channel or effect keyframe exists. Empty animations and unsupported tracks do not retain unused native clips. Effect keyframes become animation events whose integer parameter indexes a deduplicated effect list stored on the root's `BlockbenchAnimationEvents` component.
+
+The material builder detects the render pipeline once per import. It derives flipbook frame counts with Blockbench's rule, comparing the image aspect ratio with the texture's UV size, and sets the material's main texture tiling to the first frame. The runtime `BlockbenchTextureAnimation` component only writes per-material property blocks during Play mode. PBR texture groups are combined into one lit material per color texture; normal, metallic-smoothness, and emission maps are generated in memory when channels need converting.
 
 ## Asset safety
 

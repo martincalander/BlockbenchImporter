@@ -31,6 +31,8 @@ The result is one prefab-like asset with its hierarchy, meshes, textures, materi
 - Unlit or lit materials, alpha cutout, and double-sided faces
 - Bones, weights, bind poses, and skinned meshes
 - Position, rotation, and scale animation
+- Sound, particle, and instruction keyframes as animation events
+- Animated textures and PBR material texture groups
 - Camera-facing billboards
 
 The importer handles the coordinate-system conversion in one place, including pivots, normals, winding, skinning, and animation values. If something is unsupported, it should produce a warning instead of quietly disappearing.

@@ -12,14 +12,16 @@ using UnityEngine.Serialization;
 
 namespace MartinCalander.BlockbenchImporter
 {
-    [ScriptedImporter(22, "bbmodel")]
+    [ScriptedImporter(23, "bbmodel")]
     public sealed class BlockbenchImporter : ScriptedImporter
     {
         [FormerlySerializedAs("unitsPerPixel")]
         [SerializeField, Min(0.000001f)] private float importScale = CoordinateConverter.DefaultImportScale;
         [SerializeField] private bool importTextures = true;
+        [SerializeField] private bool animateTextures = true;
         [SerializeField] private bool importAnimations = true;
         [SerializeField] private bool createAnimatorController = true;
+        [SerializeField] private bool importEffectEvents = true;
         [SerializeField] private BlockbenchMaterialMode materialMode = BlockbenchMaterialMode.Unlit;
         [SerializeField] private FilterMode textureFilter = FilterMode.Point;
         [SerializeField] private TextureWrapMode textureWrap = TextureWrapMode.Clamp;
@@ -95,8 +97,10 @@ namespace MartinCalander.BlockbenchImporter
                 {
                     importScale = ValidateImportScale(importScale),
                     importTextures = importTextures,
+                    animateTextures = animateTextures,
                     importAnimations = importAnimations,
                     createAnimatorController = createAnimatorController,
+                    importEffectEvents = importEffectEvents,
                     materialMode = materialMode,
                     textureFilter = textureFilter,
                     textureWrap = textureWrap,
@@ -133,6 +137,8 @@ namespace MartinCalander.BlockbenchImporter
                     Add(context, identifiers, "material_" + material.name, material);
                 foreach (Mesh mesh in hierarchy.BuiltMeshes)
                     Add(context, identifiers, "mesh_" + mesh.name, mesh);
+                if (settings.animateTextures)
+                    AddTextureAnimation(root, materials);
 
                 if (settings.importAnimations && model.animations.Count != 0)
                 {
@@ -141,6 +147,9 @@ namespace MartinCalander.BlockbenchImporter
                     clips = animationBuilder.BuildAnimationClips();
                     foreach (AnimationClip clip in clips)
                         Add(context, identifiers, "animation_" + clip.name, clip);
+                    if (animationBuilder.EffectEvents.Count != 0)
+                        root.AddComponent<BlockbenchAnimationEvents>().SetEffects(
+                            new List<BlockbenchAnimationEvents.Effect>(animationBuilder.EffectEvents).ToArray());
 
                     if (clips.Count != 0 && settings.createAnimatorController)
                     {
@@ -196,6 +205,31 @@ namespace MartinCalander.BlockbenchImporter
             for (int suffix = 2; !identifiers.Add(unique); suffix++)
                 unique = clean + "_" + suffix;
             context.AddObjectToAsset(unique, value);
+        }
+
+        private static void AddTextureAnimation(GameObject root, MaterialBuilder materials)
+        {
+            var flipbooks = new List<BlockbenchTextureAnimation.Flipbook>();
+            var indices = new Dictionary<Material, int>();
+            var slots = new List<BlockbenchTextureAnimation.Slot>();
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                Material[] shared = renderer.sharedMaterials;
+                for (int slot = 0; slot < shared.Length; slot++)
+                {
+                    if (shared[slot] == null || !materials.TryGetFlipbook(shared[slot], out var flipbook))
+                        continue;
+                    if (!indices.TryGetValue(shared[slot], out int index))
+                    {
+                        index = flipbooks.Count;
+                        flipbooks.Add(flipbook);
+                        indices.Add(shared[slot], index);
+                    }
+                    slots.Add(new BlockbenchTextureAnimation.Slot { renderer = renderer, materialIndex = slot, flipbook = index });
+                }
+            }
+            if (slots.Count != 0)
+                root.AddComponent<BlockbenchTextureAnimation>().SetFlipbooks(flipbooks.ToArray(), slots.ToArray());
         }
 
         private static void RegisterTextureDependencies(AssetImportContext context, BbModel model)
@@ -260,6 +294,9 @@ namespace MartinCalander.BlockbenchImporter
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("materialMode"));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("textureFilter"));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("textureWrap"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("animateTextures"),
+                    new GUIContent("Animate Textures",
+                        "Play animated texture strips in Play mode with a Blockbench Texture Animation component on the root. Edit mode shows the first frame."));
                 SerializedProperty alpha = serializedObject.FindProperty("alphaMode");
                 EditorGUILayout.PropertyField(alpha);
                 if ((BlockbenchAlphaMode)alpha.enumValueIndex != BlockbenchAlphaMode.Opaque)
@@ -271,7 +308,12 @@ namespace MartinCalander.BlockbenchImporter
             SerializedProperty animations = serializedObject.FindProperty("importAnimations");
             EditorGUILayout.PropertyField(animations);
             using (new EditorGUI.DisabledScope(!animations.boolValue))
+            {
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("createAnimatorController"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("importEffectEvents"),
+                    new GUIContent("Import Effect Events",
+                        "Turn sound, particle, and instruction keyframes into animation events received by a Blockbench Animation Events component on the root."));
+            }
 
             EditorGUILayout.HelpBox(
                 "The .bbmodel is the prefab. Embedded textures, materials, meshes, clips, and the optional Animator Controller are sub-assets.",

@@ -16,6 +16,14 @@ namespace MartinCalander.BlockbenchImporter.Builders
         private readonly Dictionary<string, string> uuidToPath;
         private readonly Dictionary<string, Transform> uuidToTransform;
         private readonly BlockbenchImporterSettings settings;
+        private readonly List<BlockbenchAnimationEvents.Effect> effects = new List<BlockbenchAnimationEvents.Effect>();
+        private readonly Dictionary<(BlockbenchAnimationEvents.EffectType, string, string, string, string), int> effectIndices =
+            new Dictionary<(BlockbenchAnimationEvents.EffectType, string, string, string, string), int>();
+
+        /// <summary>
+        /// Effects referenced by the animation events of the clips built so far, in event index order.
+        /// </summary>
+        public IReadOnlyList<BlockbenchAnimationEvents.Effect> EffectEvents => effects;
 
         /// <summary>
         /// Create an animation builder.
@@ -169,9 +177,16 @@ namespace MartinCalander.BlockbenchImporter.Builders
         {
             var targets = new List<AnimationTarget>();
             var targetsByTransform = new Dictionary<Transform, AnimationTarget>();
+            var events = new List<AnimationEvent>();
             float duration = Mathf.Max(0f, anim.length);
             foreach (var pair in anim.animators)
             {
+                if (IsEffectAnimator(pair.Key, pair.Value))
+                {
+                    if (settings.importEffectEvents)
+                        duration = Mathf.Max(duration, CollectEffectEvents(pair.Value, events));
+                    continue;
+                }
                 if (!uuidToPath.TryGetValue(pair.Key, out string path))
                 {
                     Debug.LogWarning($"Animation references unknown node UUID: {pair.Key}");
@@ -208,7 +223,7 @@ namespace MartinCalander.BlockbenchImporter.Builders
                     target.animator.rotation_global)
                     targets.Add(target);
             }
-            if (targets.Count == 0) return null;
+            if (targets.Count == 0 && events.Count == 0) return null;
 
             var clip = new AnimationClip
             {
@@ -228,6 +243,11 @@ namespace MartinCalander.BlockbenchImporter.Builders
                     if (target.rotation.Count != 0 || target.animator.rotation_global)
                         BuildRotationCurves(clip, target, targetsByTransform, duration, anim);
                 }
+                if (events.Count != 0)
+                {
+                    events.Sort((left, right) => left.time.CompareTo(right.time));
+                    AnimationUtility.SetAnimationEvents(clip, events.ToArray());
+                }
                 var clipSettings = AnimationUtility.GetAnimationClipSettings(clip);
                 clipSettings.loopTime = anim.loop == "loop";
                 clipSettings.startTime = 0f;
@@ -240,6 +260,55 @@ namespace MartinCalander.BlockbenchImporter.Builders
                 Object.DestroyImmediate(clip);
                 throw;
             }
+        }
+
+        internal static bool IsEffectAnimator(string key, BbAnimator animator) =>
+            animator.type == "effect";
+
+        /// <summary>
+        /// Adds one event per sound, particle, and instruction data point and returns the latest event time.
+        /// </summary>
+        private float CollectEffectEvents(BbAnimator animator, List<AnimationEvent> events)
+        {
+            float latest = 0f;
+            foreach (BbKeyframe key in animator.keyframes)
+            {
+                BlockbenchAnimationEvents.EffectType type;
+                switch (key.channel?.ToLowerInvariant())
+                {
+                    case "sound": type = BlockbenchAnimationEvents.EffectType.Sound; break;
+                    case "particle": type = BlockbenchAnimationEvents.EffectType.Particle; break;
+                    case "timeline": type = BlockbenchAnimationEvents.EffectType.Instruction; break;
+                    default: continue;
+                }
+                float time = Mathf.Max(0f, key.time);
+                foreach (BbDataPoint point in key.data_points)
+                {
+                    var effect = new BlockbenchAnimationEvents.Effect(type,
+                        type == BlockbenchAnimationEvents.EffectType.Instruction ? null : point.effect,
+                        type == BlockbenchAnimationEvents.EffectType.Particle ? point.locator : null,
+                        type == BlockbenchAnimationEvents.EffectType.Sound ? null : point.script,
+                        type == BlockbenchAnimationEvents.EffectType.Instruction ? null : point.file);
+                    if (effect.Name.Length == 0 && effect.Script.Length == 0 && effect.File.Length == 0)
+                        continue;
+                    var identity = (effect.Type, effect.Name, effect.Locator, effect.Script, effect.File);
+                    if (!effectIndices.TryGetValue(identity, out int index))
+                    {
+                        index = effects.Count;
+                        effects.Add(effect);
+                        effectIndices.Add(identity, index);
+                    }
+                    events.Add(new AnimationEvent
+                    {
+                        time = time,
+                        functionName = BlockbenchAnimationEvents.EventFunctionName,
+                        intParameter = index,
+                        stringParameter = type == BlockbenchAnimationEvents.EffectType.Instruction ? effect.Script : effect.Name
+                    });
+                    latest = Mathf.Max(latest, time);
+                }
+            }
+            return latest;
         }
 
         private static Vector3 ReadVector(float[] value) => value != null && value.Length >= 3

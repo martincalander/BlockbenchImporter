@@ -18,6 +18,7 @@ namespace MartinCalander.BlockbenchImporter.Model
         public List<BbElement> elements = new List<BbElement>();
         public List<object> outliner = new List<object>(); // Can be strings (UUIDs) or group objects
         public List<BbTexture> textures = new List<BbTexture>();
+        public List<BbTextureGroup> texture_groups = new List<BbTextureGroup>();
         public List<BbAnimation> animations = new List<BbAnimation>();
         public List<BbGroup> groups = new List<BbGroup>();
         public BbExportOptions export_options;
@@ -162,12 +163,14 @@ namespace MartinCalander.BlockbenchImporter.Model
         public string uuid;
         public string source; // "data:image/png;base64,..." for embedded
         public string render_mode = "default"; // "default", "emissive", "layered"
-        public string pbr_channel = "color";
+        public string pbr_channel = "color"; // "color", "normal", "height", "mer"
+        public string group; // Texture group UUID
         public string render_sides = "auto"; // "auto", "front", "back", "double"
-        public int frame_time = 1;
-        public int frame_count = 1;
-        public int frame_order_type;
-        public float[] frame_order;
+        public float fps = 7f; // Flipbook speed for formats without Minecraft .mcmeta timing
+        public int frame_time = 1; // Minecraft ticks per frame for .mcmeta formats
+        public string frame_order_type = "loop"; // "loop", "backwards", "back_and_forth", "custom"
+        public string frame_order; // Space-separated frame indices for "custom", optionally "index:ticks"
+        public bool frame_interpolate;
         public bool visible = true;
         public bool use_as_default;
         public string mode = "bitmap";
@@ -183,6 +186,19 @@ namespace MartinCalander.BlockbenchImporter.Model
         // Runtime
         [NonSerialized] public int index;
         [NonSerialized] public Texture2D unityTexture;
+    }
+
+    /// <summary>
+    /// A Blockbench texture group. Material groups combine color, normal, height, and MER textures.
+    /// </summary>
+    [Serializable]
+    public class BbTextureGroup
+    {
+        public string uuid;
+        public string name;
+        public bool is_material;
+        public float[] color_value = { 255f, 255f, 255f, 255f };
+        public float[] mer_value = { 0f, 0f, 0f };
     }
 
     [Serializable]

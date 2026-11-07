@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using MartinCalander.BlockbenchImporter.Model;
 using MartinCalander.BlockbenchImporter.Utils;
 using UnityEditor;
@@ -20,6 +21,19 @@ namespace MartinCalander.BlockbenchImporter.Builders
         private readonly Dictionary<int, Texture2D> builtTextures = new Dictionary<int, Texture2D>();
         private readonly Dictionary<int, Material> builtMaterials = new Dictionary<int, Material>();
         private readonly Dictionary<int, Material> markerMaterials = new Dictionary<int, Material>();
+        private readonly List<Texture2D> generatedTextures = new List<Texture2D>();
+        private readonly Dictionary<int, BlockbenchTextureAnimation.Flipbook> textureFlipbooks =
+            new Dictionary<int, BlockbenchTextureAnimation.Flipbook>();
+        private readonly Dictionary<Material, BlockbenchTextureAnimation.Flipbook> materialFlipbooks =
+            new Dictionary<Material, BlockbenchTextureAnimation.Flipbook>();
+        private readonly RenderPipelineKind pipeline;
+
+        private enum RenderPipelineKind
+        {
+            BuiltIn,
+            Universal,
+            HighDefinition
+        }
         private static readonly Color[] MarkerColors =
         {
             Html("A2EBFF"), Html("FFF899"), Html("F1BB75"), Html("FF9B97"), Html("C5A6E8"),
@@ -31,7 +45,19 @@ namespace MartinCalander.BlockbenchImporter.Builders
             this.model = model;
             this.assetPath = assetPath;
             this.settings = settings;
+            pipeline = DetectPipeline();
         }
+
+        private static RenderPipelineKind DetectPipeline()
+        {
+            string name = GraphicsSettings.currentRenderPipeline?.GetType().Name;
+            if (name == null) return RenderPipelineKind.BuiltIn;
+            if (name.Contains("Universal") || name.Contains("URP")) return RenderPipelineKind.Universal;
+            return name.Contains("HD") ? RenderPipelineKind.HighDefinition : RenderPipelineKind.BuiltIn;
+        }
+
+        private bool IsJavaFormat => model.meta?.model_format == "java_block";
+        private bool IsBedrockFormat => model.meta?.model_format?.Contains("bedrock") == true;
 
         /// <summary>
         /// Build all textures from the model.
@@ -39,6 +65,7 @@ namespace MartinCalander.BlockbenchImporter.Builders
         public Dictionary<int, Texture2D> BuildTextures()
         {
             builtTextures.Clear();
+            textureFlipbooks.Clear();
             if (!settings.importTextures) return builtTextures;
 
             for (int i = 0; i < model.textures.Count; i++)
@@ -49,6 +76,13 @@ namespace MartinCalander.BlockbenchImporter.Builders
                 {
                     builtTextures[i] = texture;
                     texDef.unityTexture = texture;
+                    if (TryCreateFlipbook(texDef, texture.width, texture.height, IsJavaFormat, out var flipbook))
+                    {
+                        textureFlipbooks[i] = flipbook;
+                        if (texDef.frame_interpolate)
+                            model.warnings.Add("Animated texture '" + texture.name +
+                                               "' blends frames in Blockbench. Unity plays its frames without blending.");
+                    }
                 }
             }
 
@@ -61,11 +95,32 @@ namespace MartinCalander.BlockbenchImporter.Builders
         public Dictionary<int, Material> BuildMaterials()
         {
             builtMaterials.Clear();
+            materialFlipbooks.Clear();
+            var warnedGroups = new HashSet<BbTextureGroup>();
 
             foreach (var kvp in builtTextures)
             {
-                var material = CreateMaterial(kvp.Value, model.textures[kvp.Key]);
-                builtMaterials[kvp.Key] = material;
+                BbTexture texDef = model.textures[kvp.Key];
+                BbTextureGroup group = GetMaterialGroup(texDef);
+                // Normal, height, and MER textures feed their group's color material.
+                if (group != null && texDef.pbr_channel != "color")
+                    continue;
+                Material material;
+                if (group != null && settings.materialMode == BlockbenchMaterialMode.Lit &&
+                    pipeline != RenderPipelineKind.HighDefinition)
+                {
+                    material = CreatePbrMaterial(kvp.Value, texDef, group);
+                }
+                else
+                {
+                    if (group != null && warnedGroups.Add(group))
+                        model.warnings.Add("Texture group '" + (group.name ?? group.uuid) + "' is a PBR material. " +
+                            (settings.materialMode == BlockbenchMaterialMode.Lit
+                                ? "HDRP materials use only its color texture."
+                                : "Set Material Mode to Lit to apply its normal, height, and MER textures."));
+                    material = CreateMaterial(kvp.Value, texDef);
+                }
+                RegisterMaterial(kvp.Key, material);
             }
 
             return builtMaterials;
@@ -79,6 +134,10 @@ namespace MartinCalander.BlockbenchImporter.Builders
         {
             if (builtMaterials.TryGetValue(textureIndex, out var mat))
                 return mat;
+
+            // A face can use a PBR channel texture directly; give it an ordinary material on demand.
+            if (builtTextures.TryGetValue(textureIndex, out Texture2D channelTexture))
+                return RegisterMaterial(textureIndex, CreateMaterial(channelTexture, model.textures[textureIndex]));
 
             return GetMarkerMaterial(Mathf.Max(0, -textureIndex - 1));
         }
@@ -112,7 +171,124 @@ namespace MartinCalander.BlockbenchImporter.Builders
         /// </summary>
         public IEnumerable<Texture2D> GetAllTextures()
         {
-            return builtTextures.Values;
+            foreach (Texture2D texture in builtTextures.Values)
+                yield return texture;
+            foreach (Texture2D texture in generatedTextures)
+                yield return texture;
+        }
+
+        /// <summary>
+        /// Get the flipbook playback data of a material created for an animated texture.
+        /// </summary>
+        internal bool TryGetFlipbook(Material material, out BlockbenchTextureAnimation.Flipbook flipbook) =>
+            materialFlipbooks.TryGetValue(material, out flipbook);
+
+        private Material RegisterMaterial(int textureIndex, Material material)
+        {
+            builtMaterials[textureIndex] = material;
+            if (textureFlipbooks.TryGetValue(textureIndex, out var flipbook))
+            {
+                // Blockbench UVs address one frame; the material shows the first frame until playback starts.
+                string property = GetMainTextureProperty(material);
+                material.SetTextureScale(property, new Vector2(1f, 1f / flipbook.frameCount));
+                material.SetTextureOffset(property, new Vector2(0f, 1f - 1f / flipbook.frameCount));
+                flipbook.scaleOffsetProperty = property + "_ST";
+                materialFlipbooks[material] = flipbook;
+            }
+            return material;
+        }
+
+        private static string GetMainTextureProperty(Material material)
+        {
+            Shader shader = material.shader;
+            for (int index = 0; index < shader.GetPropertyCount(); index++)
+                if ((shader.GetPropertyFlags(index) & ShaderPropertyFlags.MainTexture) != 0)
+                    return shader.GetPropertyName(index);
+            return material.HasProperty("_BaseMap") ? "_BaseMap" :
+                material.HasProperty("_BaseColorMap") ? "_BaseColorMap" : "_MainTex";
+        }
+
+        private BbTextureGroup GetMaterialGroup(BbTexture texture)
+        {
+            if (string.IsNullOrEmpty(texture.group))
+                return null;
+            foreach (BbTextureGroup group in model.texture_groups)
+                if (group.is_material && group.uuid == texture.group)
+                    return group;
+            return null;
+        }
+
+        /// <summary>
+        /// Derive Blockbench's flipbook frame count and order from a texture strip whose aspect ratio differs
+        /// from its UV size. Frames are stacked vertically with the first frame at the top.
+        /// </summary>
+        internal static bool TryCreateFlipbook(BbTexture texture, int width, int height, bool minecraftTiming,
+            out BlockbenchTextureAnimation.Flipbook flipbook)
+        {
+            flipbook = default;
+            if (width <= 0 || height <= 0 || texture.uv_width <= 0 || texture.uv_height <= 0)
+                return false;
+            float uvRatio = texture.uv_width / (float)texture.uv_height;
+            float ratio = width / (float)height;
+            if (Mathf.Approximately(uvRatio, ratio))
+                return false;
+            int count = Mathf.CeilToInt(uvRatio / ratio - 0.05f);
+            if (count <= 1)
+                return false;
+
+            // Minecraft formats time frames in 20 Hz ticks; other formats use frames per second.
+            float step = minecraftTiming
+                ? Mathf.Max(16.66f, 50f * texture.frame_time) / 1000f
+                : 1f / Mathf.Max(1f, texture.fps);
+            var frames = new List<int>();
+            var durations = new List<float>();
+            switch (texture.frame_order_type)
+            {
+                case "backwards":
+                    for (int frame = count - 1; frame >= 0; frame--)
+                    {
+                        frames.Add(frame);
+                        durations.Add(step);
+                    }
+                    break;
+                case "back_and_forth":
+                    for (int index = 0; index < count * 2 - 2; index++)
+                    {
+                        frames.Add(index < count ? index : count * 2 - 2 - index);
+                        durations.Add(step);
+                    }
+                    break;
+                case "custom":
+                    foreach (string token in (texture.frame_order ?? string.Empty).Split((char[])null, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        string[] parts = token.Split(':');
+                        if (!int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int frame))
+                            continue;
+                        frames.Add((frame % count + count) % count);
+                        durations.Add(minecraftTiming && parts.Length > 1 &&
+                                      int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int ticks) &&
+                                      ticks > 0
+                            ? ticks * 0.05f
+                            : step);
+                    }
+                    break;
+            }
+            if (frames.Count == 0)
+            {
+                for (int frame = 0; frame < count; frame++)
+                {
+                    frames.Add(frame);
+                    durations.Add(step);
+                }
+            }
+
+            flipbook = new BlockbenchTextureAnimation.Flipbook
+            {
+                frameCount = count,
+                frames = frames.ToArray(),
+                durations = durations.ToArray()
+            };
+            return true;
         }
 
         /// <summary>
@@ -147,7 +323,9 @@ namespace MartinCalander.BlockbenchImporter.Builders
                 return null;
             }
 
-            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            // Normal, height, and MER channels hold data rather than color, so they are sampled linearly.
+            bool linear = texDef.pbr_channel == "normal" || texDef.pbr_channel == "height" || texDef.pbr_channel == "mer";
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false, linear);
             try
             {
                 texture.name = SanitizeName(texDef.name ?? $"Texture_{index}");
@@ -219,10 +397,9 @@ namespace MartinCalander.BlockbenchImporter.Builders
             }
         }
 
-        private Material CreateMaterial(Texture2D texture, BbTexture texDef)
+        private Material CreateMaterial(Texture2D texture, BbTexture texDef, Shader shader = null)
         {
-            Shader shader = GetShader();
-            var material = new Material(shader);
+            var material = new Material(shader != null ? shader : GetShader());
             try
             {
                 material.name = texture.name + "_Mat";
@@ -274,65 +451,182 @@ namespace MartinCalander.BlockbenchImporter.Builders
 
         private Shader GetShader()
         {
-            // Try to detect render pipeline and use appropriate shader
-            var pipeline = GraphicsSettings.currentRenderPipeline;
-
-            if (pipeline != null)
+            bool unlit = settings.materialMode == BlockbenchMaterialMode.Unlit;
+            if (pipeline == RenderPipelineKind.Universal)
             {
-                string pipelineName = pipeline.GetType().Name;
-
-                // URP
-                if (pipelineName.Contains("Universal") || pipelineName.Contains("URP"))
-                {
-                    var shader = Shader.Find(settings.materialMode == BlockbenchMaterialMode.Unlit
-                        ? "Universal Render Pipeline/Unlit"
-                        : "Universal Render Pipeline/Lit");
-                    if (shader != null) return shader;
-
-                    shader = Shader.Find("Universal Render Pipeline/Simple Lit");
-                    if (shader != null) return shader;
-                }
-
-                // HDRP
-                if (pipelineName.Contains("HD") || pipelineName.Contains("HDRP"))
-                {
-                    var shader = Shader.Find(settings.materialMode == BlockbenchMaterialMode.Unlit
-                        ? "HDRP/Unlit"
-                        : "HDRP/Lit");
-                    if (shader != null) return shader;
-                }
+                Shader shader = Shader.Find(unlit ? "Universal Render Pipeline/Unlit" : "Universal Render Pipeline/Lit") ??
+                                Shader.Find("Universal Render Pipeline/Simple Lit");
+                if (shader != null) return shader;
+            }
+            else if (pipeline == RenderPipelineKind.HighDefinition)
+            {
+                Shader shader = Shader.Find(unlit ? "HDRP/Unlit" : "HDRP/Lit");
+                if (shader != null) return shader;
             }
 
             // Built-in pipeline
-            return Shader.Find(settings.materialMode == BlockbenchMaterialMode.Unlit ? "Blockbench/Unlit" : "Blockbench/Lit")
-                   ?? Shader.Find("Standard");
+            return Shader.Find(unlit ? "Blockbench/Unlit" : "Blockbench/Lit") ?? Shader.Find("Standard");
         }
 
         private void ConfigureMaterial(Material material, bool needsAlphaClip, CullMode cullMode)
         {
-            var pipeline = GraphicsSettings.currentRenderPipeline;
+            if (pipeline == RenderPipelineKind.Universal)
+                ConfigureURPMaterial(material, needsAlphaClip, cullMode);
+            else if (pipeline == RenderPipelineKind.HighDefinition)
+                ConfigureHDRPMaterial(material, needsAlphaClip, cullMode);
+            else
+                ConfigureBuiltInMaterial(material, needsAlphaClip, cullMode);
+        }
 
-            if (pipeline != null)
+        /// <summary>
+        /// Create a lit material from a Blockbench material texture group: color, normal or height, and MER.
+        /// MER stores metalness in red, an emissive mask in green, and roughness in blue.
+        /// </summary>
+        private Material CreatePbrMaterial(Texture2D color, BbTexture texDef, BbTextureGroup group)
+        {
+            bool universal = pipeline == RenderPipelineKind.Universal;
+            Shader shader = Shader.Find(universal ? "Universal Render Pipeline/Lit" : "Standard");
+            Material material = CreateMaterial(color, texDef, shader);
+            try
             {
-                string pipelineName = pipeline.GetType().Name;
+                Texture2D normal = FindGroupTexture(group, "normal");
+                Texture2D height = FindGroupTexture(group, "height");
+                Texture2D mer = FindGroupTexture(group, "mer");
 
-                // URP configuration
-                if (pipelineName.Contains("Universal") || pipelineName.Contains("URP"))
+                // Bedrock uses DirectX normal maps; Unity expects the green channel pointing up.
+                Texture2D normalMap = normal != null
+                    ? IsBedrockFormat ? Generate(normal, "_Normal", true, FlipGreen(normal)) : normal
+                    : height != null ? Generate(height, "_Normal", true, NormalsFromHeight(height)) : null;
+                if (normalMap != null)
                 {
-                    ConfigureURPMaterial(material, needsAlphaClip, cullMode);
-                    return;
+                    material.SetTexture("_BumpMap", normalMap);
+                    material.SetFloat("_BumpScale", 1f);
+                    material.EnableKeyword("_NORMALMAP");
                 }
 
-                // HDRP configuration
-                if (pipelineName.Contains("HD") || pipelineName.Contains("HDRP"))
+                if (mer != null)
                 {
-                    ConfigureHDRPMaterial(material, needsAlphaClip, cullMode);
-                    return;
+                    material.SetTexture("_MetallicGlossMap", Generate(mer, "_MetallicSmoothness", true, MetallicSmoothness(mer)));
+                    material.EnableKeyword(universal ? "_METALLICSPECGLOSSMAP" : "_METALLICGLOSSMAP");
+                    material.SetFloat("_Metallic", 1f);
+                    material.SetFloat(universal ? "_Smoothness" : "_GlossMapScale", 1f);
+                    Color32[] emission = Emission(color, mer);
+                    if (emission != null)
+                        SetEmission(material, Generate(mer, "_Emission", false, emission), Color.white);
                 }
+                else
+                {
+                    material.SetFloat("_Metallic", Channel(group.mer_value, 0));
+                    material.SetFloat(universal ? "_Smoothness" : "_Glossiness", 1f - Channel(group.mer_value, 2));
+                    float emissive = Channel(group.mer_value, 1);
+                    if (emissive > 0f)
+                        SetEmission(material, color, new Color(emissive, emissive, emissive));
+                }
+                return material;
             }
+            catch
+            {
+                UnityEngine.Object.DestroyImmediate(material);
+                throw;
+            }
+        }
 
-            // Built-in pipeline configuration
-            ConfigureBuiltInMaterial(material, needsAlphaClip, cullMode);
+        private Texture2D FindGroupTexture(BbTextureGroup group, string channel)
+        {
+            for (int index = 0; index < model.textures.Count; index++)
+                if (model.textures[index].group == group.uuid && model.textures[index].pbr_channel == channel &&
+                    builtTextures.TryGetValue(index, out Texture2D texture))
+                    return texture;
+            return null;
+        }
+
+        private static float Channel(float[] values, int index) =>
+            values != null && index < values.Length ? Mathf.Clamp01(values[index] / 255f) : 0f;
+
+        private static void SetEmission(Material material, Texture texture, Color color)
+        {
+            material.SetTexture("_EmissionMap", texture);
+            material.SetColor("_EmissionColor", color);
+            material.EnableKeyword("_EMISSION");
+        }
+
+        private Texture2D Generate(Texture2D source, string suffix, bool linear, Color32[] pixels)
+        {
+            var texture = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false, linear)
+            {
+                name = source.name + suffix,
+                filterMode = settings.textureFilter,
+                wrapMode = settings.textureWrap
+            };
+            try
+            {
+                texture.SetPixels32(pixels);
+                texture.Apply(false, false);
+                generatedTextures.Add(texture);
+                return texture;
+            }
+            catch
+            {
+                UnityEngine.Object.DestroyImmediate(texture);
+                throw;
+            }
+        }
+
+        internal static Color32[] FlipGreen(Texture2D normal)
+        {
+            Color32[] pixels = normal.GetPixels32();
+            for (int index = 0; index < pixels.Length; index++)
+                pixels[index].g = (byte)(255 - pixels[index].g);
+            return pixels;
+        }
+
+        /// <summary>Convert a grayscale height map to a tangent-space normal map from neighbouring texel slopes.</summary>
+        internal static Color32[] NormalsFromHeight(Texture2D height)
+        {
+            Color32[] source = height.GetPixels32();
+            int width = height.width;
+            int rows = height.height;
+            var normals = new Color32[source.Length];
+            float Sample(int x, int y) => source[Mathf.Clamp(y, 0, rows - 1) * width + Mathf.Clamp(x, 0, width - 1)].r / 255f;
+            for (int y = 0; y < rows; y++)
+            for (int x = 0; x < width; x++)
+            {
+                Vector3 normal = new Vector3(Sample(x - 1, y) - Sample(x + 1, y), Sample(x, y - 1) - Sample(x, y + 1), 1f).normalized;
+                normals[y * width + x] = new Color32(
+                    (byte)Mathf.RoundToInt((normal.x * 0.5f + 0.5f) * 255f),
+                    (byte)Mathf.RoundToInt((normal.y * 0.5f + 0.5f) * 255f),
+                    (byte)Mathf.RoundToInt((normal.z * 0.5f + 0.5f) * 255f), 255);
+            }
+            return normals;
+        }
+
+        /// <summary>Pack MER metalness into red and inverted roughness into alpha, as Unity metallic maps expect.</summary>
+        internal static Color32[] MetallicSmoothness(Texture2D mer)
+        {
+            Color32[] pixels = mer.GetPixels32();
+            for (int index = 0; index < pixels.Length; index++)
+                pixels[index] = new Color32(pixels[index].r, 0, 0, (byte)(255 - pixels[index].b));
+            return pixels;
+        }
+
+        /// <summary>Mask the color texture with the MER emissive channel, or return null when nothing is emissive.</summary>
+        internal static Color32[] Emission(Texture2D color, Texture2D mer)
+        {
+            Color32[] mask = mer.GetPixels32();
+            Color32[] colors = color.GetPixels32();
+            var emission = new Color32[mask.Length];
+            bool emissive = false;
+            for (int y = 0; y < mer.height; y++)
+            for (int x = 0; x < mer.width; x++)
+            {
+                int level = mask[y * mer.width + x].g;
+                emissive |= level != 0;
+                // Sample the nearest color texel so different texture sizes stay aligned.
+                Color32 source = colors[y * color.height / mer.height * color.width + x * color.width / mer.width];
+                emission[y * mer.width + x] = new Color32((byte)(source.r * level / 255), (byte)(source.g * level / 255),
+                    (byte)(source.b * level / 255), 255);
+            }
+            return emissive ? emission : null;
         }
 
         private void ConfigureBuiltInMaterial(Material material, bool needsAlphaClip, CullMode cullMode)
@@ -460,7 +754,9 @@ namespace MartinCalander.BlockbenchImporter.Builders
         public float importScale = CoordinateConverter.DefaultImportScale;
         public bool importAnimations = true;
         public bool createAnimatorController = true;
+        public bool importEffectEvents = true;
         public bool importTextures = true;
+        public bool animateTextures = true;
         public bool includeHiddenElements;
         public bool includeNonExportedElements;
         public bool importBoundingBoxesAsColliders = true;

@@ -6,7 +6,8 @@ This is the rough direction, not a promise or schedule.
 - Test imports across more Unity versions.
 - Make warnings for plugin-defined data more useful.
 - Check generated materials in more render pipelines.
-- Add texture meshes, splines, PBR packing, and animated textures when their Blockbench behavior can be reproduced properly.
+- Add texture meshes and splines when their Blockbench behavior can be reproduced properly.
+- Apply PBR texture groups to HDRP materials.
 
 Some things are deliberately out of scope:
 
