@@ -34,6 +34,21 @@ namespace MartinCalander.BlockbenchImporter.Tests
             Object.DestroyImmediate(result.mesh);
         }
 
+        [Test]
+        public void CubeBuilder_WithoutEnabledFacesProducesNoMesh()
+        {
+            var cube = new BbElement
+            {
+                type = "cube",
+                faces = new Dictionary<string, BbFace>
+                {
+                    ["north"] = new BbFace { uv = new[] { 0f, 0f, 16f, 16f }, enabled = false }
+                }
+            };
+
+            Assert.That(CubeMeshBuilder.BuildCubeMesh(cube, new[] { 16, 16 }, 1).mesh, Is.Null);
+        }
+
         [TestCase(90)]
         [TestCase(-270)]
         [TestCase(450)]

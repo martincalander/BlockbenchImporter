@@ -83,6 +83,23 @@ namespace MartinCalander.BlockbenchImporter.Tests
                 "{\"elements\":[{\"from\":[" + value + ",0,0]}]}"));
         }
 
+        [TestCase("{\"elements\":[{\"from\":[1]}]}")]
+        [TestCase("{\"elements\":[{\"scale\":[1,1]}]}")]
+        [TestCase("{\"elements\":[{\"faces\":{\"north\":{\"uv\":[0,0]}}}]}")]
+        [TestCase("{\"elements\":[{\"type\":\"mesh\",\"vertices\":{\"a\":[0,1]}}]}")]
+        public void ModelRejectsShortGeometryArrays(string json)
+        {
+            Assert.Throws<FormatException>(() => BbModelParser.Parse(json));
+        }
+
+        [Test]
+        public void MeshFacesSkipNullVertexIds()
+        {
+            var model = BbModelParser.Parse("{\"elements\":[{\"type\":\"mesh\",\"vertices\":{\"a\":[0,0,0]}," +
+                "\"faces\":{\"face\":{\"vertices\":[\"a\",null]}}}]}");
+            Assert.That(model.elements[0].meshFaces["face"].vertices, Is.EqualTo(new[] { "a" }));
+        }
+
         [TestCase("NaN")]
         [TestCase("Infinity")]
         [TestCase("-Infinity")]

@@ -170,35 +170,17 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
         }
 
         /// <summary>
-        /// Calculate face normal from vertices.
+        /// Calculate the face normal from the polygon's summed fan cross products (Newell's method),
+        /// so a reflex or collinear leading corner cannot reverse or cancel it.
         /// </summary>
         private static Vector3 CalculateFaceNormal(List<Vector3> vertices)
         {
-            if (vertices.Count < 3)
-                return Vector3.up;
+            Vector3 origin = vertices[0];
+            Vector3 normal = Vector3.zero;
+            for (int i = 1; i < vertices.Count - 1; i++)
+                normal += Vector3.Cross(vertices[i] - origin, vertices[i + 1] - origin);
 
-            Vector3 v0 = vertices[0];
-            Vector3 v1 = vertices[1];
-            Vector3 v2 = vertices[2];
-
-            Vector3 edge1 = v1 - v0;
-            Vector3 edge2 = v2 - v0;
-
-            Vector3 normal = Vector3.Cross(edge1, edge2).normalized;
-
-            // If normal is zero (degenerate face), try other combinations
-            if (normal.sqrMagnitude < 0.0001f && vertices.Count > 3)
-            {
-                for (int i = 1; i < vertices.Count - 1; i++)
-                {
-                    edge1 = vertices[i] - v0;
-                    edge2 = vertices[i + 1] - v0;
-                    normal = Vector3.Cross(edge1, edge2).normalized;
-                    if (normal.sqrMagnitude > 0.0001f)
-                        break;
-                }
-            }
-
+            normal = normal.normalized;
             return normal.sqrMagnitude > 0.0001f ? normal : Vector3.up;
         }
 

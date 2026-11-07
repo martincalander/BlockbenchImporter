@@ -256,9 +256,24 @@ namespace MartinCalander.BlockbenchImporter.Builders
                     renderer.sharedMaterials = sharedMaterials;
                     renderer.bones = bones;
                     renderer.rootBone = builtArmature.gameObject.transform;
-                    renderer.localBounds = builtMesh.result.mesh.bounds;
+                    // Skinned bounds are relative to the root bone, not to the mesh object.
+                    renderer.localBounds = TransformBounds(builtMesh.result.mesh.bounds,
+                        renderer.rootBone.worldToLocalMatrix * builtMesh.gameObject.transform.localToWorldMatrix);
                 }
             }
+        }
+
+        internal static Bounds TransformBounds(Bounds bounds, Matrix4x4 matrix)
+        {
+            Vector3 extents = bounds.extents;
+            Vector3 x = matrix.MultiplyVector(new Vector3(extents.x, 0f, 0f));
+            Vector3 y = matrix.MultiplyVector(new Vector3(0f, extents.y, 0f));
+            Vector3 z = matrix.MultiplyVector(new Vector3(0f, 0f, extents.z));
+            var size = new Vector3(
+                Mathf.Abs(x.x) + Mathf.Abs(y.x) + Mathf.Abs(z.x),
+                Mathf.Abs(x.y) + Mathf.Abs(y.y) + Mathf.Abs(z.y),
+                Mathf.Abs(x.z) + Mathf.Abs(y.z) + Mathf.Abs(z.z)) * 2f;
+            return new Bounds(matrix.MultiplyPoint3x4(bounds.center), size);
         }
 
         private void CollectChildrenOfType(BbElement parent, string type, List<BbElement> result, bool recursive,

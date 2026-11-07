@@ -147,6 +147,9 @@ namespace MartinCalander.BlockbenchImporter.MeshBuilders
                     AddQuad(tris, baseVertex, !reverse);
             }
 
+            if (verticesList.Count == 0)
+                return result;
+
             // Build mesh
             var mesh = new Mesh();
             mesh.name = element.name ?? "Cube";

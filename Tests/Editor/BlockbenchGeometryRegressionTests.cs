@@ -128,15 +128,21 @@ namespace MartinCalander.BlockbenchImporter.Tests
             }
         }
 
-        [Test]
-        public void ConcavePolygonKeepsItsAreaAndDoesNotFillTheNotch()
+        // Starting at vertex 2 places the reflex corner second, which reversed a normal taken from the first three vertices.
+        [TestCase(0)]
+        [TestCase(2)]
+        public void ConcavePolygonKeepsItsAreaAndDoesNotFillTheNotch(int firstVertex)
         {
-            var element = Polygon(new[]
+            float[][] outline =
             {
                 new[] { 0f, 0f, 0f }, new[] { 2f, 0f, 0f },
                 new[] { 2f, 1f, 0f }, new[] { 1f, 1f, 0f },
                 new[] { 1f, 2f, 0f }, new[] { 0f, 2f, 0f }
-            });
+            };
+            var points = new float[outline.Length][];
+            for (int index = 0; index < outline.Length; index++)
+                points[index] = outline[(index + firstVertex) % outline.Length];
+            var element = Polygon(points);
             CubeMeshResult result = MeshElementBuilder.BuildMeshElement(element, new[] { 16, 16 }, 0);
             try
             {
@@ -287,6 +293,11 @@ namespace MartinCalander.BlockbenchImporter.Tests
 
                 SkinnedMeshRenderer renderer = root.GetComponentInChildren<SkinnedMeshRenderer>();
                 Assert.That(renderer, Is.Not.Null);
+                Bounds meshBounds = renderer.sharedMesh.bounds;
+                Transform surface = root.transform.Find("group/rig/surface");
+                AssertVector(renderer.localBounds.center,
+                    renderer.rootBone.InverseTransformPoint(surface.TransformPoint(meshBounds.center)));
+                AssertVector(renderer.localBounds.size, meshBounds.size);
                 Vector3[] restVertices = renderer.sharedMesh.vertices;
                 renderer.BakeMesh(baked);
                 for (int index = 0; index < restVertices.Length; index++)

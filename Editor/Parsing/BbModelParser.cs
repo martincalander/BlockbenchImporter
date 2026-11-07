@@ -250,17 +250,17 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 export = GetBool(dict, "export", true),
                 visibility = GetBool(dict, "visibility", true),
                 shade = GetBool(dict, "shade", true),
-                from = GetFloatArray(dict, "from", new[] { 0f, 0f, 0f }),
-                to = GetFloatArray(dict, "to", new[] { 16f, 16f, 16f }),
+                from = GetFloatArray(dict, "from", new[] { 0f, 0f, 0f }, 3),
+                to = GetFloatArray(dict, "to", new[] { 16f, 16f, 16f }, 3),
                 autouv = GetInt(dict, "autouv"),
                 color = GetInt(dict, "color"),
                 inflate = GetFloat(dict, "inflate"),
                 stretch = GetFloatArray(dict, "stretch", new[] { 1f, 1f, 1f }),
-                origin = GetFloatArray(dict, "origin", new[] { 0f, 0f, 0f }),
+                origin = GetFloatArray(dict, "origin", new[] { 0f, 0f, 0f }, 3),
                 position = GetFloatArray(dict, "position", null),
                 local_pivot = GetFloatArray(dict, "local_pivot", null),
                 rotation = GetFloatArray(dict, "rotation", null),
-                scale = GetFloatArray(dict, "scale", new[] { 1f, 1f, 1f }),
+                scale = GetFloatArray(dict, "scale", new[] { 1f, 1f, 1f }, 3),
                 size = GetFloatArray(dict, "size", new[] { 2f, 2f }),
                 offset = GetFloatArray(dict, "offset", new[] { 0f, 0f }),
                 facing_mode = GetString(dict, "facing_mode", "lookat"),
@@ -285,7 +285,7 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                     {
                         var face = new BbFace
                         {
-                            uv = GetFloatArray(faceDict, "uv", new[] { 0f, 0f, 16f, 16f }),
+                            uv = GetFloatArray(faceDict, "uv", new[] { 0f, 0f, 16f, 16f }, 4),
                             texture = GetInt(faceDict, "texture", -1),
                             rotation = GetInt(faceDict, "rotation"),
                             tint = GetNullableInt(faceDict, "tint"),
@@ -306,7 +306,10 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 {
                     if (kvp.Value is List<object> coords)
                     {
-                        element.vertices[kvp.Key] = ListToFloatArray(coords);
+                        float[] position = ListToFloatArray(coords);
+                        if (position.Length < 3)
+                            throw new FormatException("Mesh vertex '" + kvp.Key + "' must contain three numbers.");
+                        element.vertices[kvp.Key] = position;
                     }
                 }
             }
@@ -329,7 +332,8 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                         if (faceDict.TryGetValue("vertices", out var faceVerts) && faceVerts is List<object> vertList)
                         {
                             foreach (var v in vertList)
-                                meshFace.vertices.Add(v.ToString());
+                                if (v != null)
+                                    meshFace.vertices.Add(v.ToString());
                         }
 
                         if (faceDict.TryGetValue("uv", out var uvObj) && uvObj is Dictionary<string, object> uvDict)
@@ -652,13 +656,16 @@ namespace MartinCalander.BlockbenchImporter.Parsing
             return result;
         }
 
-        private static float[] GetFloatArray(Dictionary<string, object> dict, string key, float[] defaultValue)
+        private static float[] GetFloatArray(Dictionary<string, object> dict, string key, float[] defaultValue,
+            int requiredLength = 0)
         {
-            if (dict.TryGetValue(key, out var value) && value is List<object> list)
-            {
-                return ListToFloatArray(list);
-            }
-            return defaultValue;
+            if (!dict.TryGetValue(key, out var value) || !(value is List<object> list))
+                return defaultValue;
+
+            float[] result = ListToFloatArray(list);
+            if (result.Length < requiredLength)
+                throw new FormatException("The model field '" + key + "' must contain at least " + requiredLength + " numbers.");
+            return result;
         }
 
         private static float[] ListToFloatArray(List<object> list)

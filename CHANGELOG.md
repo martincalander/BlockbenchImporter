@@ -28,6 +28,10 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 
 ### Fixed
 
+- Compute polygon face normals from the whole outline, so a concave face whose reflex corner comes second keeps its outward winding.
+- Report short geometry arrays and mesh vertex coordinates as import errors instead of index exceptions, and skip null mesh-face vertex ids.
+- Skip mesh sub-assets for cubes whose faces are all disabled or missing.
+- Express skinned mesh bounds in the armature's space, so offset meshes are not culled early.
 - Reject malformed JSON, excessive nesting, cyclic child references, and geometry numbers outside the finite float range with clear import errors. Import Scale also rejects NaN and infinity.
 - Preserve inline groups without UUIDs and ignore repeated outliner references with a warning to prevent duplicate hierarchy expansion.
 - Release generated objects when an import fails before Unity takes ownership of them.
