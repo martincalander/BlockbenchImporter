@@ -89,7 +89,7 @@ See [importing models](Documentation~/importing-models.md) for the details.
 
 Blockbench plugins can add their own element types and expressions. This importer does not run plugin code or Molang from an asset file. Unknown elements are kept as transforms where possible and reported in the Console.
 
-Texture meshes, splines, PBR texture packing, and animated texture playback still need dedicated implementations. Custom shaders and render-pipeline lighting can also make the Unity result look different from the Blockbench viewport.
+Texture meshes and splines still need dedicated implementations. Custom shaders and render-pipeline lighting can also make the Unity result look different from the Blockbench viewport.
 
 If a supported feature imports incorrectly, that is a bug. Please [report it](https://github.com/martincalander/BlockbenchImporter/issues/new/choose) with the smallest model that shows the problem.
 

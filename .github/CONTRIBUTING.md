@@ -46,6 +46,7 @@ If a `.bbmodel` fixture is necessary, strip it down to the problem and make sure
 - Reimport an affected model twice and check that the result is stable.
 - Update [format support](../Documentation~/format-support.md) and the [changelog](../CHANGELOG.md) when behavior changes.
 - Run `python3 .github/scripts/validate_package.py`.
+- When Markdown changes, run `npx --yes markdownlint-cli2@0.23.0 "**/*.md"`.
 
 Keep the pull request focused and explain how Blockbench stores the data you changed. A commit subject like `Fix rotated north-face UVs` is more helpful than `Update importer`.
 

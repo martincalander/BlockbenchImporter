@@ -36,7 +36,7 @@ The file is data, not code:
 - Embedded textures are decoded in memory.
 - JSON syntax and string escapes are validated before model conversion; JSON nesting and generated hierarchy depth are limited to 128 levels.
 - Cyclic child references fail the import. Repeated element or group references keep their first occurrence and produce a warning.
-- Geometry values must fit a finite float. Non-finite animation values produce the same warning and zero fallback as expressions.
+- Geometry values must fit a finite float. Non-finite keyframe values produce the same warning and zero fallback as expressions. Non-finite keyframe times, animation lengths, Bezier handles, and texture frame rates fail the import.
 - Failed imports release generated objects that have not been registered with Unity's import context.
 - External images take precedence over embedded snapshots, with embedded fallback when the external file is missing.
 - Missing texture data produces a warning. Project texture dependencies are registered even before the referenced file exists.

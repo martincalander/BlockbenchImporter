@@ -38,6 +38,9 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 - Reject malformed JSON, excessive nesting, cyclic child references, and geometry numbers outside the finite float range with clear import errors. Import Scale also rejects NaN and infinity.
 - Preserve inline groups without UUIDs and ignore repeated outliner references with a warning to prevent duplicate hierarchy expansion.
 - Release generated objects when an import fails before Unity takes ownership of them.
+- Keep importing from the embedded image when an external texture path contains characters the runtime cannot resolve, instead of failing the whole import.
+- Parse integer fields stored as strings, such as face rotation, independently of the system culture.
+- Declare `2021.3.0f1` as the minimum Unity release, matching the documented requirement.
 - Normalize negative cube UV rotations and nonpositive texture dimensions, and omit unused material slots from discarded mesh faces.
 - Treat non-finite animation values like unsupported expressions, with a warning and a zero value.
 - Stopped empty and unsupported animations from leaving unregistered animation clips in memory.

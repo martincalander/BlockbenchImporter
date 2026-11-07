@@ -6,6 +6,7 @@ using MartinCalander.BlockbenchImporter.Parsing;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
 
 namespace MartinCalander.BlockbenchImporter.Tests
@@ -75,6 +76,35 @@ namespace MartinCalander.BlockbenchImporter.Tests
             Assert.That(TextureId(modelPath), Is.EqualTo(originalId));
             Assert.That(File.ReadAllText(modelPath), Is.EqualTo(source),
                 "Import and dependency changes must not rewrite the Blockbench project.");
+        }
+
+        [Test]
+        public void UnresolvableTexturePathKeepsTheEmbeddedImage()
+        {
+            string modelPath = folder + "/InvalidPath.bbmodel";
+            var model = new Dictionary<string, object>
+            {
+                ["meta"] = new Dictionary<string, object>
+                {
+                    ["format_version"] = "5.0", ["model_format"] = "free"
+                },
+                ["textures"] = new object[]
+                {
+                    new Dictionary<string, object>
+                    {
+                        ["name"] = "pixel", ["uuid"] = "pixel",
+                        ["relative_path"] = "Textures/pixel\0.png", ["path"] = "/pixel\0.png",
+                        ["source"] = "data:image/png;base64," + Convert.ToBase64String(Png(Color.red))
+                    }
+                }
+            };
+            File.WriteAllText(modelPath, MiniJson.Serialize(model));
+
+            // Mono can report the rejected path while loading the external file. The embedded
+            // image must still import instead of the whole model failing.
+            LogAssert.ignoreFailingMessages = true;
+            Refresh();
+            AssertPixel(modelPath, Color.red);
         }
 
         private static void Refresh()

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Threading;
 using MartinCalander.BlockbenchImporter.Model;
 using MartinCalander.BlockbenchImporter.Parsing;
 using NUnit.Framework;
@@ -150,6 +152,28 @@ namespace MartinCalander.BlockbenchImporter.Tests
             Assert.That(nodes[0].group.name, Is.EqualTo("anonymous"));
             Assert.That(nodes[0].children, Has.Count.EqualTo(1));
             Assert.That(model.warnings, Has.Some.Contains("Duplicate outliner reference"));
+        }
+
+        [Test]
+        public void Parse_IntegerStringsIgnoreTheCurrentCulture()
+        {
+            // Mono rejects "-" when a culture's negative sign is U+2212. CoreCLR still accepts a
+            // hyphen for that sign, so use a sign without a hyphen fallback on every runtime.
+            var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+            culture.NumberFormat.NegativeSign = "~";
+            CultureInfo previous = Thread.CurrentThread.CurrentCulture;
+            try
+            {
+                Thread.CurrentThread.CurrentCulture = culture;
+                var faces = BbModelParser.Parse("{\"elements\":[{\"type\":\"cube\",\"uuid\":\"cube\"," +
+                    "\"faces\":{\"north\":{\"rotation\":\"-90\",\"tint\":\"-1\"}}}]}").elements[0].faces;
+                Assert.That(faces["north"].rotation, Is.EqualTo(-90));
+                Assert.That(faces["north"].tint, Is.EqualTo(-1));
+            }
+            finally
+            {
+                Thread.CurrentThread.CurrentCulture = previous;
+            }
         }
 
         [Test]

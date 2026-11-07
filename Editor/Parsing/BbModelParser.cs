@@ -640,7 +640,8 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 if (value is long l) return (int)l;
                 if (value is double d) return (int)d;
                 if (value is int i) return i;
-                if (int.TryParse(value?.ToString(), out int result)) return result;
+                if (int.TryParse(value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture,
+                        out int result)) return result;
             }
             return defaultValue;
         }
@@ -652,7 +653,8 @@ namespace MartinCalander.BlockbenchImporter.Parsing
                 if (value is long l) return (int)l;
                 if (value is double d) return (int)d;
                 if (value is int i) return i;
-                if (int.TryParse(value.ToString(), out int result)) return result;
+                if (int.TryParse(value.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture,
+                        out int result)) return result;
             }
             return null;
         }

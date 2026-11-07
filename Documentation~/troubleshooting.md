@@ -10,14 +10,14 @@ Check **Import Scale**. The default is `0.0625`, or sixteen Blockbench model uni
 
 ## A texture is missing
 
-- Check the Console for the path Unity tried to read.
+- Check the Console for a `Could not load texture data` warning naming the texture.
 - Make sure an external texture moved with the `.bbmodel`.
 - Reimport after moving either file.
 - Embed the texture in Blockbench if the project needs to move between machines often.
 
 ## An element is missing
 
-Was it hidden or marked not to export in Blockbench? Enable **Include Hidden Elements** or **Include Non-Exported Elements** if you want it anyway.
+Was it hidden or marked not to export in Blockbench? Enable **Include Hidden Elements** or **Include Non Exported Elements** if you want it anyway.
 
 Plugin-defined elements may only appear as transforms for now. The Console warning will say so.
 

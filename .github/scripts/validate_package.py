@@ -38,7 +38,7 @@ def validate_manifest() -> None:
             fail(f"package.json: {key!r} must equal {value!r}")
 
     version = str(manifest.get("version", ""))
-    if not re.fullmatch(r"0|[1-9]\d*\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?", version):
+    if not re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?", version):
         fail(f"package.json: invalid semantic version {version!r}")
 
     for key in ("description", "unity", "documentationUrl", "changelogUrl", "licensesUrl", "repository", "author"):

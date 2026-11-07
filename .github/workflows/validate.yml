@@ -29,6 +29,9 @@ jobs:
       - name: Validate Python script
         run: python3 -m py_compile .github/scripts/validate_package.py
 
+      - name: Lint Markdown
+        run: npx --yes markdownlint-cli2@0.23.0 "**/*.md"
+
       - name: Check whitespace errors
         run: git diff --check "$(git hash-object -t tree /dev/null)" -- . ':(exclude)*.meta'
 

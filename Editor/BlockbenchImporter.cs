@@ -251,9 +251,21 @@ namespace MartinCalander.BlockbenchImporter
         {
             if (string.IsNullOrEmpty(source)) return;
             source = source.Replace('\\', '/');
-            string candidate = Path.IsPathRooted(source)
-                ? Path.GetFullPath(source)
-                : Path.GetFullPath(Path.Combine(modelDirectory, source));
+            string candidate;
+            try
+            {
+                candidate = Path.IsPathRooted(source)
+                    ? Path.GetFullPath(source)
+                    : Path.GetFullPath(Path.Combine(modelDirectory, source));
+            }
+            catch (Exception exception) when (exception is ArgumentException ||
+                                              exception is NotSupportedException ||
+                                              exception is PathTooLongException)
+            {
+                // A path the runtime cannot normalize is never a project asset. The texture
+                // loader falls back to the embedded image for it.
+                return;
+            }
             candidate = candidate.Replace('\\', '/');
             if (!candidate.StartsWith(projectRoot + "/", StringComparison.Ordinal)) return;
             string assetPath = candidate.Substring(projectRoot.Length + 1);
