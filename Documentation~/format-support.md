@@ -44,4 +44,6 @@ The importer warns instead of dropping data without a word. If it can keep a use
 
 Malformed JSON, cyclic child references, non-finite geometry values, and nesting beyond 128 levels fail the import with an error. Repeated outliner references keep their first occurrence and produce a warning. Non-finite keyframe values use the same zero fallback as unsupported expressions. Non-finite keyframe times, animation lengths, Bezier handles, and texture frame rates fail the import.
 
+Rotation baking is limited to 100,000 samples per track and 1,000,000 per clip. Held time outside the rotation key range does not need continuous sampling. Flipbook frames must each occupy at least one image row. Exceeding these limits fails the import with an error naming the affected animation or texture.
+
 If something marked **Yes** imports incorrectly, please send the smallest `.bbmodel` that reproduces it, screenshots from Blockbench and Unity, the package and Unity versions, your render pipeline, and the import settings you changed.

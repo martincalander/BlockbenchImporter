@@ -14,7 +14,11 @@ Parsing and Unity object creation are kept apart on purpose. A format change sho
 
 Position and scale curves retain separate incoming and outgoing tangents. Rotation curves are sampled with extra keys around discontinuities, and global rotations account for animated ancestors. The parser converts the older animation axes described in Blockbench's [format history](https://www.blockbench.net/wiki/docs/bbmodel/).
 
+Equal-time keys retain their file order. Position and scale tracks use the first key's incoming value and the last key's outgoing value at each time, preserving a discontinuity instead of passing duplicate times to Unity's curve constructor.
+
 Rotation tracks parse their incoming and outgoing numeric values once per clip, then locate surrounding keys with a binary search. Rest-pose metadata is collected once for the complete clip batch. These caches are rebuilt on each build, so edits to the source model are visible when a builder is reused.
+
+Rotation curves are submitted in bulk with their numeric tangents. Sampling covers the key range, including animated ancestors for global rotations, while held time before and after that range needs only boundary keys. Baking is limited to 100,000 samples per track and 1,000,000 per clip; excessive requests fail with the animation and target name before allocating the sample arrays.
 
 Mesh builders reuse temporary UV and triangulation buffers within each mesh. Cube corner lookups are fixed data; public triangulation results remain independent lists. Meshes with at most 65,535 vertices use 16-bit indices. Larger polygon and merged meshes use 32-bit indices. Merging passes the existing lists directly to Unity and calculates bounds once.
 
@@ -25,6 +29,8 @@ Groups use shared model pivots, while armature bones use parent-local origins. C
 Animations only create a Unity clip when a supported transform channel or effect keyframe exists. Empty animations and unsupported tracks do not retain unused native clips. Effect keyframes become animation events whose integer parameter indexes a deduplicated effect list stored on the root's `BlockbenchAnimationEvents` component.
 
 The material builder detects the render pipeline once per import. It derives flipbook frame counts with Blockbench's rule, comparing the image aspect ratio with the texture's UV size, and sets the material's main texture tiling to the first frame. The runtime `BlockbenchTextureAnimation` component only writes per-material property blocks during Play mode. PBR texture groups are combined into one lit material per color texture; normal, metallic-smoothness, and emission maps are generated in memory when channels need converting.
+
+Flipbooks must have at least one image row per frame. Mesh tangents are generated only when an assigned material enables normal mapping, after geometry scaling and before armature setup.
 
 ## Asset safety
 

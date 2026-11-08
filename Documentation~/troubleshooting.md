@@ -39,6 +39,10 @@ The Console identifies malformed JSON, cyclic child references, excessive nestin
 
 A duplicate outliner reference is imported once and produces a warning. Inline groups without UUIDs remain in the hierarchy, but cannot be animation targets without an identifier.
 
+For a rotation baking limit error, reduce the time range between rotation keys or the animation snapping rate in Blockbench. The limits are 100,000 samples per track and 1,000,000 per clip. A long clip with a short animated section is fine; held time outside that section is not sampled continuously.
+
+If a texture reports more animation frames than image rows, correct its UV width and height in Blockbench. Every frame of a vertical strip needs at least one image row.
+
 ## Molang or unknown-element warnings
 
 The importer does not run expressions from asset files. Bake expression-driven animation to numeric keyframes in Blockbench. Unknown plugin geometry needs a dedicated importer implementation before Unity can render it.

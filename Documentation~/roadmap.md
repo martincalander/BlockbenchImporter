@@ -2,6 +2,10 @@
 
 This is the rough direction, not a promise or schedule.
 
+- Preserve sub-asset references when source names change. Mesh, texture, material, and clip identifiers currently use names, so a rename can change their Unity file IDs. Moving to UUID-based identifiers needs a migration that preserves existing references.
+- Track render-pipeline changes as import dependencies so generated materials refresh automatically. For now, reimport models after changing pipelines.
+- Verify animated skinned-mesh bounds across complete clips. Current bounds cover the rest pose; large bone motions can move vertices outside them.
+- Consider optional mesh combining for static models with many cubes, with animation, skinning, and per-element customization kept intact.
 - Add more small, redistributable test models.
 - Test imports across more Unity versions.
 - Make warnings for plugin-defined data more useful.

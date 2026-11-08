@@ -12,6 +12,52 @@ namespace MartinCalander.BlockbenchImporter.Tests
 {
     public sealed class BlockbenchAnimationTests
     {
+        [TestCase(float.MaxValue, 24)]
+        [TestCase(1f, int.MaxValue)]
+        [TestCase(2000f, 24)]
+        public void ExcessiveRotationBakingFailsBeforeAllocatingSamples(float end, int snapping)
+        {
+            var animator = new BbAnimator();
+            animator.keyframes.Add(Key("rotation", 0f, 0f));
+            animator.keyframes.Add(Key("rotation", end, 90f));
+            BbModel model = Model(animator, end);
+            model.animations[0].snapping = snapping;
+            model.animations[0].name = "Oversized_" + System.Guid.NewGuid().ToString("N");
+
+            var error = Assert.Throws<System.FormatException>(() => Build(model));
+
+            Assert.That(error.Message, Does.Contain("rotation baking limit").And.Contain("target"));
+            Assert.That(Resources.FindObjectsOfTypeAll<AnimationClip>().Where(
+                clip => clip.name == model.animations[0].name), Is.Empty, "A rejected clip must be released.");
+        }
+
+        [Test]
+        public void ConstantRotationNeedsOnlyEndpointsEvenInALongClip()
+        {
+            WithClip(new[] { Key("rotation", 0f, 45f) }, 3600f, clip =>
+            {
+                Assert.That(clip.length, Is.EqualTo(3600f));
+                Assert.That(Curve(clip, "m_LocalRotation.x").length, Is.EqualTo(2));
+                Assert.That(Quaternion.Angle(Rotation(clip, 1800f), Quaternion.AngleAxis(45f, Vector3.right)),
+                    Is.LessThan(0.1f));
+            });
+        }
+
+        [Test]
+        public void RotationSamplingSkipsHeldTimeBeforeAndAfterTheKeys()
+        {
+            WithClip(new[] { Key("rotation", 1f, 0f), Key("rotation", 2f, 90f) }, 3600f, clip =>
+            {
+                Assert.That(clip.length, Is.EqualTo(3600f));
+                Assert.That(Curve(clip, "m_LocalRotation.x").length, Is.LessThan(200));
+                Assert.That(Quaternion.Angle(Rotation(clip, 0.5f), Quaternion.identity), Is.LessThan(0.1f));
+                Assert.That(Quaternion.Angle(Rotation(clip, 1.5f), Quaternion.AngleAxis(45f, Vector3.right)),
+                    Is.LessThan(0.1f));
+                Assert.That(Quaternion.Angle(Rotation(clip, 1800f), Quaternion.AngleAxis(90f, Vector3.right)),
+                    Is.LessThan(0.1f));
+            });
+        }
+
         [TestCase("once", WrapMode.Once, false)]
         [TestCase("loop", WrapMode.Loop, true)]
         [TestCase("hold", WrapMode.ClampForever, false)]
@@ -180,6 +226,41 @@ namespace MartinCalander.BlockbenchImporter.Tests
             {
                 Assert.That(Quaternion.Angle(Rotation(clip, 1f), Quaternion.AngleAxis(90f, Vector3.right)), Is.LessThan(0.1f));
                 Assert.That(Quaternion.Angle(Rotation(clip, 1.5f), Quaternion.AngleAxis(225f, Vector3.right)), Is.LessThan(0.1f));
+            });
+        }
+
+        [TestCase("position", "m_LocalPosition.x", -1f)]
+        [TestCase("scale", "m_LocalScale.x", 1f)]
+        public void DuplicateScalarTimesPreserveIncomingAndOutgoingValues(string channel, string property, float sign)
+        {
+            // More than sixteen unsorted keys exercise stable ordering beyond small-list sorting paths.
+            var keys = new List<BbKeyframe> { Key(channel, 2f, 180f), Key(channel, 0f, 0f) };
+            for (int index = 0; index < 20; index++) keys.Add(Key(channel, 1f, 60f + index));
+            BbKeyframe last = Key(channel, 1f, 100f);
+            last.data_points.Add(Point(120f));
+            keys.Add(last);
+            WithClip(keys.ToArray(), 2f, clip =>
+            {
+                AnimationCurve curve = Curve(clip, property);
+                Assert.That(curve.Evaluate(0.5f), Is.EqualTo(30f * sign).Within(0.001f));
+                Assert.That(curve.Evaluate(1f), Is.EqualTo(60f * sign).Within(0.001f));
+                Assert.That(curve.Evaluate(1.5f), Is.EqualTo(150f * sign).Within(0.001f));
+            });
+        }
+
+        [Test]
+        public void DuplicateScalarTimesKeepSeparateInterpolationModesAndFinalIncomingValue()
+        {
+            BbKeyframe outgoing = Key("position", 1f, 120f);
+            outgoing.interpolation = "step";
+            WithClip(new[] { Key("position", 0f, 0f), Key("position", 1f, 60f), outgoing,
+                Key("position", 2f, 180f), Key("position", 2f, 240f) }, 2f, clip =>
+            {
+                AnimationCurve curve = Curve(clip, "m_LocalPosition.x");
+                Assert.That(curve.Evaluate(0.5f), Is.EqualTo(-30f).Within(0.001f));
+                Assert.That(curve.Evaluate(1f), Is.EqualTo(-60f).Within(0.001f));
+                Assert.That(curve.Evaluate(1.5f), Is.EqualTo(-120f).Within(0.001f));
+                Assert.That(curve.Evaluate(2f), Is.EqualTo(-180f).Within(0.001f));
             });
         }
 

@@ -232,7 +232,12 @@ namespace MartinCalander.BlockbenchImporter.Builders
             float ratio = width / (float)height;
             if (Mathf.Approximately(uvRatio, ratio))
                 return false;
-            int count = Mathf.CeilToInt(uvRatio / ratio - 0.05f);
+            double frameCount = Math.Ceiling((double)texture.uv_width * height / texture.uv_height / width - 0.05);
+            // Each vertical frame needs at least one image row. Check before converting or allocating.
+            if (frameCount > height)
+                throw new FormatException("Texture '" + (texture.name ?? "unnamed") +
+                    "' has more animation frames than image rows. Check its UV width and height in Blockbench.");
+            int count = (int)frameCount;
             if (count <= 1)
                 return false;
 

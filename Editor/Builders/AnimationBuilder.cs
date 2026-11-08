@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using MartinCalander.BlockbenchImporter.Model;
 using MartinCalander.BlockbenchImporter.Utils;
 using UnityEditor;
@@ -12,6 +13,8 @@ namespace MartinCalander.BlockbenchImporter.Builders
     /// </summary>
     public class AnimationBuilder
     {
+        private const int MaxRotationSamplesPerTrack = 100000;
+        private const int MaxRotationSamplesPerClip = 1000000;
         private readonly BbModel model;
         private readonly Dictionary<string, string> uuidToPath;
         private readonly Dictionary<string, Transform> uuidToTransform;
@@ -215,10 +218,10 @@ namespace MartinCalander.BlockbenchImporter.Builders
                     channel.Add(key);
                     duration = Mathf.Max(duration, key.time);
                 }
-                target.position.Sort((left, right) => left.time.CompareTo(right.time));
-                target.rotation.Sort((left, right) => left.time.CompareTo(right.time));
+                SortKeyframes(target.position);
+                SortKeyframes(target.rotation);
                 target.CacheRotationPoints();
-                target.scale.Sort((left, right) => left.time.CompareTo(right.time));
+                SortKeyframes(target.scale);
                 if (target.position.Count != 0 || target.rotation.Count != 0 || target.scale.Count != 0 ||
                     target.animator.rotation_global)
                     targets.Add(target);
@@ -234,6 +237,7 @@ namespace MartinCalander.BlockbenchImporter.Builders
             };
             try
             {
+                int remainingRotationSamples = MaxRotationSamplesPerClip;
                 foreach (AnimationTarget target in targets)
                 {
                     BuildVectorCurves(clip, target.path, target.position, "localPosition", target.restPosition,
@@ -241,7 +245,8 @@ namespace MartinCalander.BlockbenchImporter.Builders
                     BuildVectorCurves(clip, target.path, target.scale, "localScale", Vector3.zero,
                         target.restScale, duration, anim.loop);
                     if (target.rotation.Count != 0 || target.animator.rotation_global)
-                        BuildRotationCurves(clip, target, targetsByTransform, duration, anim);
+                        BuildRotationCurves(clip, target, targetsByTransform, duration, anim,
+                            ref remainingRotationSamples);
                 }
                 if (events.Count != 0)
                 {
@@ -336,15 +341,41 @@ namespace MartinCalander.BlockbenchImporter.Builders
             System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture,
             out float number) ? number : 0f;
 
+        private static void SortKeyframes(List<BbKeyframe> keys)
+        {
+            for (int index = 1; index < keys.Count; index++)
+            {
+                if (keys[index - 1].time <= keys[index].time) continue;
+                // Equal times keep their file order: the first key is incoming, the last is outgoing.
+                BbKeyframe[] sorted = keys.OrderBy(key => key.time).ToArray();
+                keys.Clear();
+                keys.AddRange(sorted);
+                return;
+            }
+        }
+
         private static void BuildVectorCurves(AnimationClip clip, string path, List<BbKeyframe> source,
             string property, Vector3 offset, Vector3 multiplier, float duration, string loop)
         {
             if (source.Count == 0) return;
-            var valid = source.FindAll(key => key.data_points != null && key.data_points.Count != 0);
-            if (valid.Count == 0) return;
+            var incoming = new List<BbKeyframe>();
+            var outgoing = new List<BbKeyframe>();
+            foreach (BbKeyframe key in source)
+            {
+                if (key.data_points == null || key.data_points.Count == 0) continue;
+                int last = incoming.Count - 1;
+                if (last >= 0 && incoming[last].time == key.time)
+                    outgoing[last] = key;
+                else
+                {
+                    incoming.Add(key);
+                    outgoing.Add(key);
+                }
+            }
+            if (incoming.Count == 0) return;
             for (int axis = 0; axis < 3; axis++)
             {
-                AnimationCurve curve = BuildScalarCurve(valid, axis, duration, loop, property == "localScale");
+                AnimationCurve curve = BuildScalarCurve(incoming, outgoing, axis, duration, loop, property == "localScale");
                 for (int index = 0; index < curve.length; index++)
                 {
                     Keyframe key = curve[index];
@@ -359,8 +390,8 @@ namespace MartinCalander.BlockbenchImporter.Builders
             }
         }
 
-        private static AnimationCurve BuildScalarCurve(List<BbKeyframe> source, int axis, float duration,
-            string loop, bool scale)
+        private static AnimationCurve BuildScalarCurve(List<BbKeyframe> source, List<BbKeyframe> outgoingSource,
+            int axis, float duration, string loop, bool scale)
         {
             var keys = new List<Keyframe>();
             var incoming = new int[source.Count];
@@ -371,7 +402,7 @@ namespace MartinCalander.BlockbenchImporter.Builders
                 incoming[index] = keys.Count;
                 keys.Add(new Keyframe(key.time, ScalarValue(GetPoint(key, false), axis, scale)));
                 outgoing[index] = incoming[index];
-                if (key.data_points.Count > 1 && key.time < duration)
+                if ((key != outgoingSource[index] || key.data_points.Count > 1) && key.time < duration)
                 {
                     float gap = index + 1 < source.Count ? source[index + 1].time - key.time : duration - key.time;
                     float afterTime = key.time + Mathf.Min(0.00001f, gap * 0.001f);
@@ -381,7 +412,7 @@ namespace MartinCalander.BlockbenchImporter.Builders
                         beforeJump.outTangent = float.PositiveInfinity;
                         keys[incoming[index]] = beforeJump;
                         outgoing[index] = keys.Count;
-                        keys.Add(new Keyframe(afterTime, ScalarValue(GetPoint(key, true), axis, scale)));
+                        keys.Add(new Keyframe(afterTime, ScalarValue(GetPoint(outgoingSource[index], true), axis, scale)));
                     }
                 }
             }
@@ -391,7 +422,8 @@ namespace MartinCalander.BlockbenchImporter.Builders
                 Keyframe left = keys[leftIndex], right = keys[rightIndex];
                 float gap = right.time - left.time;
                 if (gap <= 0f) continue;
-                string mode = SegmentMode(source[index], source[index + 1]);
+                BbKeyframe leftSource = outgoingSource[index], rightSource = source[index + 1];
+                string mode = SegmentMode(leftSource, rightSource);
                 if (mode == "step")
                     left.outTangent = right.inTangent = float.PositiveInfinity;
                 else if (mode == "catmullrom")
@@ -403,19 +435,19 @@ namespace MartinCalander.BlockbenchImporter.Builders
                         if (previousIndex < 0) previousIndex = source.Count - 2;
                         if (nextIndex >= source.Count) nextIndex = 1;
                     }
-                    if (previousIndex >= 0 && source[index].data_points.Count == 1)
-                        previous = ScalarValue(GetPoint(source[previousIndex], true), axis, scale);
-                    if (nextIndex < source.Count && source[index + 1].data_points.Count == 1)
+                    if (previousIndex >= 0 && source[index] == leftSource && leftSource.data_points.Count == 1)
+                        previous = ScalarValue(GetPoint(outgoingSource[previousIndex], true), axis, scale);
+                    if (nextIndex < source.Count && rightSource == outgoingSource[index + 1] && rightSource.data_points.Count == 1)
                         next = ScalarValue(GetPoint(source[nextIndex], false), axis, scale);
                     left.outTangent = (right.value - previous) * 0.5f / gap;
                     right.inTangent = (next - left.value) * 0.5f / gap;
                 }
                 else if (mode == "bezier")
                 {
-                    float rightTime = Mathf.Clamp(ReadAxis(source[index].bezier_right_time, axis, 0.1f), 0f, gap);
-                    float leftTime = Mathf.Clamp(-ReadAxis(source[index + 1].bezier_left_time, axis, -0.1f), 0f, gap);
-                    float rightValue = ReadAxis(source[index].bezier_right_value, axis);
-                    float leftValue = ReadAxis(source[index + 1].bezier_left_value, axis);
+                    float rightTime = Mathf.Clamp(ReadAxis(leftSource.bezier_right_time, axis, 0.1f), 0f, gap);
+                    float leftTime = Mathf.Clamp(-ReadAxis(rightSource.bezier_left_time, axis, -0.1f), 0f, gap);
+                    float rightValue = ReadAxis(leftSource.bezier_right_value, axis);
+                    float leftValue = ReadAxis(rightSource.bezier_left_value, axis);
                     // Tiny nonzero handle times also represent vertical handles without creating a stepped tangent.
                     if (rightTime == 0f && rightValue != 0f) rightTime = gap * 0.000001f;
                     if (leftTime == 0f && leftValue != 0f) leftTime = gap * 0.000001f;
@@ -466,10 +498,11 @@ namespace MartinCalander.BlockbenchImporter.Builders
         }
 
         private void BuildRotationCurves(AnimationClip clip, AnimationTarget target,
-            Dictionary<Transform, AnimationTarget> targetsByTransform, float duration, BbAnimation animation)
+            Dictionary<Transform, AnimationTarget> targetsByTransform, float duration, BbAnimation animation,
+            ref int remainingSamples)
         {
-            var curves = new[] { new AnimationCurve(), new AnimationCurve(), new AnimationCurve(), new AnimationCurve() };
-            int sampleRate = Mathf.Max(60, Mathf.Max(1, animation.snapping) * 4);
+            double sampleRate = System.Math.Max(60d, System.Math.Max(1d, animation.snapping) * 4d);
+            int sampleLimit = Mathf.Min(MaxRotationSamplesPerTrack, remainingSamples);
             var sampleTimes = new SortedSet<float> { 0f, duration };
             var heldTimes = new HashSet<float>();
             // Global rotations also need the ancestor keys that can change their local-space correction.
@@ -483,48 +516,77 @@ namespace MartinCalander.BlockbenchImporter.Builders
                     if (ancestor.animator.rotation_global) break;
                 }
             }
+            float sampleStart = duration, sampleEnd = 0f;
             foreach (AnimationTarget candidate in dependencies)
-            foreach (BbKeyframe key in candidate.rotation)
             {
-                sampleTimes.Add(key.time);
-                if (key.time > 0f)
+                // Outside the key range the rotation is held, including global-rotation ancestors.
+                if (candidate.rotation.Count > 1)
                 {
-                    float beforeTime = Mathf.Max(0f, key.time - 0.00001f);
-                    sampleTimes.Add(beforeTime);
-                    heldTimes.Add(beforeTime);
+                    sampleStart = Mathf.Min(sampleStart, Mathf.Max(0f, candidate.rotation[0].time));
+                    sampleEnd = Mathf.Max(sampleEnd, candidate.rotation[candidate.rotation.Count - 1].time);
                 }
-                if (key.data_points.Count > 1 && key.time < duration)
+                foreach (BbKeyframe key in candidate.rotation)
                 {
-                    sampleTimes.Add(Mathf.Min(duration, key.time + 0.00001f));
-                    heldTimes.Add(key.time);
+                    sampleTimes.Add(key.time);
+                    if (key.time > 0f)
+                    {
+                        float beforeTime = Mathf.Max(0f, key.time - 0.00001f);
+                        sampleTimes.Add(beforeTime);
+                        heldTimes.Add(beforeTime);
+                    }
+                    if (key.data_points.Count > 1 && key.time < duration)
+                    {
+                        sampleTimes.Add(Mathf.Min(duration, key.time + 0.00001f));
+                        heldTimes.Add(key.time);
+                    }
+                    CheckSampleCount(sampleTimes.Count);
                 }
             }
-            for (int frame = 1; frame < Mathf.CeilToInt(duration * sampleRate); frame++)
-                sampleTimes.Add(frame / (float)sampleRate);
+            double frameCount = System.Math.Ceiling(System.Math.Max(0d, (double)sampleEnd - sampleStart) * sampleRate);
+            CheckSampleCount(frameCount + sampleTimes.Count);
+            for (int frame = 1; frame < (int)frameCount; frame++)
+                sampleTimes.Add((float)(sampleStart + frame / sampleRate));
+            remainingSamples -= sampleTimes.Count;
+
+            void CheckSampleCount(double count)
+            {
+                if (double.IsNaN(count) || count > sampleLimit)
+                    throw new System.FormatException("Animation '" + animation.name + "' on '" + target.path +
+                        "' exceeds the rotation baking limit (100000 samples per track, 1000000 per clip). " +
+                        "Reduce its keyframe time range or snapping rate in Blockbench.");
+            }
+
             Quaternion previous = target.restRotation;
             var timeList = new List<float>(sampleTimes);
-            foreach (float time in timeList)
+            var keys = new[] { new Keyframe[timeList.Count], new Keyframe[timeList.Count],
+                new Keyframe[timeList.Count], new Keyframe[timeList.Count] };
+            for (int index = 0; index < timeList.Count; index++)
             {
+                float time = timeList[index];
                 Quaternion value = EvaluateLocalRotation(target, time, targetsByTransform, animation.loop);
                 if (Quaternion.Dot(previous, value) < 0f)
                     value = new Quaternion(-value.x, -value.y, -value.z, -value.w);
                 previous = value;
-                curves[0].AddKey(time, value.x);
-                curves[1].AddKey(time, value.y);
-                curves[2].AddKey(time, value.z);
-                curves[3].AddKey(time, value.w);
+                for (int axis = 0; axis < 4; axis++)
+                    keys[axis][index] = new Keyframe(time, value[axis]);
             }
+            var curves = new AnimationCurve[4];
             var bindings = new EditorCurveBinding[4];
             for (int axis = 0; axis < 4; axis++)
             {
-                AnimationCurve curve = curves[axis];
-                for (int index = 0; index < curve.length; index++)
+                Keyframe[] channel = keys[axis];
+                for (int index = 0; index < channel.Length; index++)
                 {
-                    AnimationUtility.SetKeyBroken(curve, index, true);
-                    AnimationUtility.SetKeyLeftTangentMode(curve, index, AnimationUtility.TangentMode.Linear);
-                    AnimationUtility.SetKeyRightTangentMode(curve, index, heldTimes.Contains(curve[index].time)
-                        ? AnimationUtility.TangentMode.Constant : AnimationUtility.TangentMode.Linear);
+                    Keyframe key = channel[index];
+                    if (index > 0)
+                        key.inTangent = (key.value - channel[index - 1].value) / (key.time - channel[index - 1].time);
+                    if (heldTimes.Contains(key.time)) key.outTangent = float.PositiveInfinity;
+                    else if (index + 1 < channel.Length)
+                        key.outTangent = (channel[index + 1].value - key.value) / (channel[index + 1].time - key.time);
+                    channel[index] = key;
                 }
+                // Supply complete curves once instead of repeatedly inserting keys and updating tangents.
+                curves[axis] = new AnimationCurve(channel);
                 bindings[axis] = EditorCurveBinding.FloatCurve(target.path, typeof(Transform),
                     "m_LocalRotation." + "xyzw"[axis]);
             }

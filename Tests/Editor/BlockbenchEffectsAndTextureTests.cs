@@ -168,6 +168,69 @@ namespace MartinCalander.BlockbenchImporter.Tests
             Assert.That(MaterialBuilder.TryCreateFlipbook(texture, width * 2, height * 2, false, out _), Is.False);
         }
 
+        [TestCase(17)]
+        [TestCase(int.MaxValue)]
+        public void FlipbooksRejectMoreFramesThanImageRowsBeforeAllocating(int uvWidth)
+        {
+            var texture = new BbTexture { name = "Invalid strip", uv_width = uvWidth, uv_height = 1 };
+            var error = Assert.Throws<FormatException>(() =>
+                MaterialBuilder.TryCreateFlipbook(texture, 16, 64, false, out _));
+            Assert.That(error.Message, Does.Contain("Invalid strip").And.Contain("image rows"));
+        }
+
+        [Test]
+        public void FlipbooksAllowOneImageRowPerFrame()
+        {
+            var texture = new BbTexture { uv_width = 16, uv_height = 1 };
+            Assert.That(MaterialBuilder.TryCreateFlipbook(texture, 16, 64, false, out var flipbook), Is.True);
+            Assert.That(flipbook.frameCount, Is.EqualTo(64));
+        }
+
+        [TestCase("cube", "normal", BlockbenchMaterialMode.Lit)]
+        [TestCase("mesh", "normal", BlockbenchMaterialMode.Lit)]
+        [TestCase("billboard", "normal", BlockbenchMaterialMode.Lit)]
+        [TestCase("cube", "height", BlockbenchMaterialMode.Lit)]
+        [TestCase("cube", "normal", BlockbenchMaterialMode.Unlit)]
+        public void NormalMappedGeometryHasTangentsWhileUnlitGeometryOmitsThem(
+            string type, string channel, BlockbenchMaterialMode mode)
+        {
+            BbModel model = BbModelParser.Parse(@"{
+                ""meta"":{""format_version"":""5.0"",""model_format"":""free""},
+                ""elements"":[{""uuid"":""surface"",""name"":""Surface"",""type"":""" + type + @""",
+                    ""vertices"":{""a"":[0,0,0],""b"":[1,0,0],""c"":[0,1,0]},
+                    ""faces"":{""north"":{""texture"":0,""uv"":[0,0,16,16]},
+                        ""front"":{""texture"":0,""uv"":[0,0,16,16]},
+                        ""triangle"":{""texture"":0,""vertices"":[""a"",""b"",""c""],
+                            ""uv"":{""a"":[0,0],""b"":[16,0],""c"":[0,16]}}}}],
+                ""outliner"":[""surface""]
+            }");
+            model.texture_groups.Add(new BbTextureGroup { uuid = "group", is_material = true });
+            model.textures.Add(new BbTexture { name = "Color", group = "group", source = DataUri(Solid(2, 2, Color.white)) });
+            model.textures.Add(new BbTexture { name = "Surface", group = "group", pbr_channel = channel,
+                source = DataUri(Solid(2, 2, new Color32(128, 128, 255, 255))) });
+            var settings = new BlockbenchImporterSettings { materialMode = mode };
+            MaterialBuilder materials = Builder(model, settings);
+            materials.BuildTextures();
+            materials.BuildMaterials();
+            var hierarchy = new HierarchyBuilder(model, settings, materials);
+            Keep(hierarchy.BuildHierarchy());
+            Mesh mesh = Keep(hierarchy.BuiltMeshes.Single());
+
+            if (mode == BlockbenchMaterialMode.Unlit)
+            {
+                Assert.That(mesh.tangents, Is.Empty);
+                return;
+            }
+            Assert.That(mesh.tangents.Length, Is.EqualTo(mesh.vertexCount));
+            for (int index = 0; index < mesh.vertexCount; index++)
+            {
+                Vector4 tangent = mesh.tangents[index];
+                Assert.That(((Vector3)tangent).magnitude, Is.EqualTo(1f).Within(0.001f));
+                Assert.That(Vector3.Dot(mesh.normals[index], tangent), Is.EqualTo(0f).Within(0.001f));
+                Assert.That(Mathf.Abs(tangent.w), Is.EqualTo(1f));
+            }
+        }
+
         [Test]
         public void FlipbookPlaybackWrapsAndShowsFramesFromTheTopOfTheStrip()
         {

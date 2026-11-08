@@ -160,8 +160,16 @@ namespace MartinCalander.BlockbenchImporter.Builders
                 meshes.Add(result.mesh);
                 ApplyImportScale(result.mesh);
                 result.mesh.name = name;
+                Material[] sharedMaterials = materials.GetMaterialsForSubmeshes(result.textureIndices);
+                // Normal maps need a tangent basis; unlit meshes can omit this vertex stream.
+                foreach (Material material in sharedMaterials)
+                    if (material != null && material.IsKeywordEnabled("_NORMALMAP"))
+                    {
+                        result.mesh.RecalculateTangents();
+                        break;
+                    }
                 gameObject.AddComponent<MeshFilter>().sharedMesh = result.mesh;
-                gameObject.AddComponent<MeshRenderer>().sharedMaterials = materials.GetMaterialsForSubmeshes(result.textureIndices);
+                gameObject.AddComponent<MeshRenderer>().sharedMaterials = sharedMaterials;
             }
             if (!string.IsNullOrEmpty(element.uuid))
                 builtElements[element.uuid] = new BuiltElement(gameObject, result);

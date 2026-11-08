@@ -12,7 +12,7 @@ using UnityEngine.Serialization;
 
 namespace MartinCalander.BlockbenchImporter
 {
-    [ScriptedImporter(23, "bbmodel")]
+    [ScriptedImporter(24, "bbmodel")]
     public sealed class BlockbenchImporter : ScriptedImporter
     {
         [FormerlySerializedAs("unitsPerPixel")]

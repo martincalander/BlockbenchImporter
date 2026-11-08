@@ -6,6 +6,7 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 
 ### Changed
 
+- Build sampled rotation curves in bulk and skip held time before and after their keys, reducing import work and clip size for sparse animations.
 - Use 16-bit index buffers for small meshes, avoid temporary arrays when merging meshes, and collect rest-pose metadata once for each animation build.
 - Parse ordinary JSON strings without temporary character buffers and remove redundant triangulation loop counters.
 - Renamed the package ID to `com.martincalander.blockbenchimporter` and public namespaces and assembly names to `MartinCalander.BlockbenchImporter`.
@@ -31,6 +32,10 @@ Changes are listed here by release. Versions follow [Semantic Versioning](https:
 
 ### Fixed
 
+- Preserve the first incoming and last outgoing position or scale value at duplicate keyframe times, including separate interpolation modes. Equal-time keys retain their file order when sorting.
+- Generate mesh tangents when a material uses a normal map, including normal maps converted from height textures. Unlit meshes retain their smaller vertex layout.
+- Reject rotation baking above 100,000 samples per track or 1,000,000 per clip with an actionable error, before excessive allocation. Large snapping values no longer overflow the sampling rate.
+- Reject flipbook UV dimensions that imply more frames than image rows before allocating frame arrays.
 - Compute polygon face normals from the whole outline, so a concave face whose reflex corner comes second keeps its outward winding.
 - Report short geometry arrays and mesh vertex coordinates as import errors instead of index exceptions, and skip null mesh-face vertex ids.
 - Skip mesh sub-assets for cubes whose faces are all disabled or missing.
